@@ -16,6 +16,7 @@ const (
 	Wall  CellType = '#'
 	Floor CellType = '.'
 	DoorC CellType = '+'
+	DoorO CellType = 'O'
 )
 
 type Node struct {

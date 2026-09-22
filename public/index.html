@@ -8,25 +8,26 @@
         canvas { display: block; }
     </style>
     <script type="module">
-  // Import Firebase Core and Firestore
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-  import { getFirestore } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+  import { getDatabase } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
 
   // Your web app's Firebase configuration
   const firebaseConfig = {
-    apiKey: "AIzaSyC7mL3l2vR8jZVI8zDzgQc8ARUkuOxyvx4",
-    authDomain: "vtt76-38137.firebaseapp.com",
-    projectId: "vtt76-38137",
-    storageBucket: "vtt76-38137.firebasestorage.app",
-    messagingSenderId: "181758820645",
-    appId: "1:181758820645:web:213c8f1b9afa29d5c51acc"
+    apiKey: "AIzaSyCZsi52vnXECw-7ZJaXdtkH-flLhZbzffk",
+    authDomain: "vtt76-4876c.firebaseapp.com",
+    databaseURL: "https://vtt76-4876c-default-rtdb.firebaseio.com",
+    projectId: "vtt76-4876c",
+    storageBucket: "vtt76-4876c.firebasestorage.app",
+    messagingSenderId: "313342233664",
+    appId: "1:313342233664:web:4cf91cd555ddcfabbf63a5"
   };
 
-  // Initialize Firebase and Firestore
+  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  
-  // Attach it to the window so Go WebAssembly can use it
+  const db = getDatabase(app);
+
+  // Expose the database globally so Go/WebAssembly can see it
   window.firebaseDB = db;
 </script>
     <script src="wasm_exec.js"></script>

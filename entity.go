@@ -40,50 +40,6 @@ type Senses struct {
 	Blindsight     int // Range in feet
 }
 
-// SkillBlueprint defines the core rules for a specific skill
-type SkillBlueprint struct {
-	ID                string
-	Name              string
-	KeyAbility        string // "STR", "DEX", "CON", "INT", "WIS", "CHA", or "NONE"
-	TrainedOnly       bool
-	ArmorCheckPenalty bool
-}
-
-// GlobalSkills acts as the registry for all available 3.5e skills
-var GlobalSkills = map[string]SkillBlueprint{
-	"skill_appraise":         {ID: "skill_appraise", Name: "Appraise", KeyAbility: "INT", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_balance":          {ID: "skill_balance", Name: "Balance", KeyAbility: "DEX", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_bluff":            {ID: "skill_bluff", Name: "Bluff", KeyAbility: "CHA", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_climb":            {ID: "skill_climb", Name: "Climb", KeyAbility: "STR", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_concentration":    {ID: "skill_concentration", Name: "Concentration", KeyAbility: "CON", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_decipher_script":  {ID: "skill_decipher_script", Name: "Decipher Script", KeyAbility: "INT", TrainedOnly: true, ArmorCheckPenalty: false},
-	"skill_diplomacy":        {ID: "skill_diplomacy", Name: "Diplomacy", KeyAbility: "CHA", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_disable_device":   {ID: "skill_disable_device", Name: "Disable Device", KeyAbility: "INT", TrainedOnly: true, ArmorCheckPenalty: false},
-	"skill_disguise":         {ID: "skill_disguise", Name: "Disguise", KeyAbility: "CHA", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_escape_artist":    {ID: "skill_escape_artist", Name: "Escape Artist", KeyAbility: "DEX", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_forgery":          {ID: "skill_forgery", Name: "Forgery", KeyAbility: "INT", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_gather_info":      {ID: "skill_gather_info", Name: "Gather Information", KeyAbility: "CHA", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_handle_animal":    {ID: "skill_handle_animal", Name: "Handle Animal", KeyAbility: "CHA", TrainedOnly: true, ArmorCheckPenalty: false},
-	"skill_heal":             {ID: "skill_heal", Name: "Heal", KeyAbility: "WIS", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_hide":             {ID: "skill_hide", Name: "Hide", KeyAbility: "DEX", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_intimidate":       {ID: "skill_intimidate", Name: "Intimidate", KeyAbility: "CHA", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_jump":             {ID: "skill_jump", Name: "Jump", KeyAbility: "STR", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_listen":           {ID: "skill_listen", Name: "Listen", KeyAbility: "WIS", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_move_silently":    {ID: "skill_move_silently", Name: "Move Silently", KeyAbility: "DEX", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_open_lock":        {ID: "skill_open_lock", Name: "Open Lock", KeyAbility: "DEX", TrainedOnly: true, ArmorCheckPenalty: false},
-	"skill_ride":             {ID: "skill_ride", Name: "Ride", KeyAbility: "DEX", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_search":           {ID: "skill_search", Name: "Search", KeyAbility: "INT", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_sense_motive":     {ID: "skill_sense_motive", Name: "Sense Motive", KeyAbility: "WIS", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_sleight_of_hand":  {ID: "skill_sleight_of_hand", Name: "Sleight of Hand", KeyAbility: "DEX", TrainedOnly: true, ArmorCheckPenalty: true},
-	"skill_spellcraft":       {ID: "skill_spellcraft", Name: "Spellcraft", KeyAbility: "INT", TrainedOnly: true, ArmorCheckPenalty: false},
-	"skill_spot":             {ID: "skill_spot", Name: "Spot", KeyAbility: "WIS", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_survival":         {ID: "skill_survival", Name: "Survival", KeyAbility: "WIS", TrainedOnly: false, ArmorCheckPenalty: false},
-	"skill_swim":             {ID: "skill_swim", Name: "Swim", KeyAbility: "STR", TrainedOnly: false, ArmorCheckPenalty: true},
-	"skill_tumble":           {ID: "skill_tumble", Name: "Tumble", KeyAbility: "DEX", TrainedOnly: true, ArmorCheckPenalty: true},
-	"skill_use_magic_device": {ID: "skill_use_magic_device", Name: "Use Magic Device", KeyAbility: "CHA", TrainedOnly: true, ArmorCheckPenalty: false},
-	"skill_use_rope":         {ID: "skill_use_rope", Name: "Use Rope", KeyAbility: "DEX", TrainedOnly: false, ArmorCheckPenalty: false},
-}
-
 // ClassProgression tracks a character's level and choices in a specific class
 type ClassProgression struct {
 	ClassID string // Maps to ClassBlueprint.ID (e.g., "cls_cleric")
@@ -200,13 +156,48 @@ func (e *Entity) GetSkillTotal(skillID string) int {
 
 	abilityMod := e.GetAbilityModifier(blueprint.KeyAbility)
 
-	// Note: In a fully fleshed out engine, you would also query armor check penalties,
-	// racial bonuses, and feat synergies here before returning the final total.
-
 	return int(math.Floor(float64(ranks))) + abilityMod
 }
 
 // GetPassiveSpot implements the passive Perception rule (10 + Spot Modifier)
 func (e *Entity) GetPassiveSpot() int {
 	return 10 + e.GetSkillTotal("skill_spot")
+}
+
+// EntityJSON represents the universal data structure stored in Firebase.
+// This is used for Player Characters, NPCs, and Monsters.
+type EntityJSON struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`     // "Player", "NPC", "Monster"
+	OwnerID string `json:"owner_id"` // Matches the Firebase user UID (for players)
+
+	// Identity
+	Name      string `json:"name"`
+	Race      string `json:"race"`  // e.g., "race_dwarf_hill"
+	Class     string `json:"class"` // e.g., "cls_rogue"
+	Level     int    `json:"level"`
+	Alignment string `json:"alignment"`
+
+	// Core Stats
+	AbilityScores map[string]int `json:"ability_scores"` // STR, DEX, CON, INT, WIS, CHA
+	MaxHP         int            `json:"max_hp"`
+	CurrentHP     int            `json:"current_hp"`
+	BaseAttack    int            `json:"base_attack"`
+	Speed         int            `json:"speed"`
+
+	// Armor & Defenses
+	ACNormal int `json:"ac_normal"`
+	ACTouch  int `json:"ac_touch"`
+	ACFlat   int `json:"ac_flat"`
+	SaveFort int `json:"save_fort"`
+	SaveRef  int `json:"save_ref"`
+	SaveWill int `json:"save_will"`
+
+	// Progression
+	SkillRanks map[string]int `json:"skill_ranks"` // e.g., {"skill_spot": 4, "skill_open_lock": 4}
+	Feats      []string       `json:"feats"`       // e.g., ["feat_improved_unarmed_strike", "feat_dodge"]
+
+	// Inventory (To be expanded)
+	EquippedWeapon string `json:"equipped_weapon"`
+	EquippedArmor  string `json:"equipped_armor"`
 }

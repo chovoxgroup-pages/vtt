@@ -1,15 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
-	"syscall/js"
 	"time"
-
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/harbdog/raycaster-go"
 )
 
 type Config struct {
@@ -22,22 +20,7 @@ type Config struct {
 	APL      int
 }
 
-func testFirebaseConnection() {
-	// Reach out of WebAssembly and grab the browser's global window
-	window := js.Global()
-
-	// Try to grab the database we set up in index.html
-	db := window.Get("firebaseDB")
-
-	if db.IsUndefined() {
-		fmt.Println("Uh oh: Go cannot see the Firebase database.")
-	} else {
-		fmt.Println("Success: Go has made contact with Firebase!")
-	}
-}
-
 func main() {
-	testFirebaseConnection()
 	sizeFlag := flag.String("size", "random", "Dungeon size: few, normal, many, random")
 	funcFlag := flag.String("function", "random", "Dungeon function: fortification, worship, restraint, storage, shelter, concealment, random")
 	trapFlag := flag.String("traps", "some", "Traps frequency: none, some, many")
@@ -64,7 +47,7 @@ func main() {
 	gameMap.PlaceDoors()
 	gameMap.PlaceRoomTraps()
 	gameMap.PlaceMonsters()
-	gameMap.PlaceTreasure() // <-- Added Treasure Hook
+	gameMap.PlaceTreasure()
 	gameMap.Print()
 
 	fmt.Println("\n--- Room Semantic Data ---")
@@ -116,35 +99,42 @@ func main() {
 			pos.X, pos.Y, door.IsOpen, door.Stuck, door.Lock, trapStr, door.Secret)
 		count++
 	}
-	// --- Launch Ebitengine ---
-	ebiten.SetWindowSize(1024, 768)
-	ebiten.SetWindowTitle("Brandon's VTT - Raycaster")
 
-	// Find the focal room to spawn the player
-	var startX, startY float64
-	for _, r := range gameMap.Rooms {
-		if r.IsFocal {
-			cx, cy := r.Center()
-			startX = float64(cx) + 0.5 // Add 0.5 to perfectly center them in the tile
-			startY = float64(cy) + 0.5
-			break
+	// Serialize the map for the 2D HTML Tabletop
+	// Note: We create an exportable payload since maps with struct keys (Node) cannot be marshaled directly to JSON
+	exportPayload := struct {
+		Width  int
+		Height int
+		Grid   [60][120]rune // Using standard dimensions
+		Rooms  []Room
+		Doors  map[string]*Door
+	}{
+		Width:  120, // From map.go
+		Height: 60,  // From map.go
+		Rooms:  gameMap.Rooms,
+		Doors:  make(map[string]*Door),
+	}
+
+	// Convert [Height][Width]CellType to [Height][Width]rune
+	for y := 0; y < 60; y++ {
+		for x := 0; x < 120; x++ {
+			exportPayload.Grid[y][x] = rune(gameMap.Grid[y][x])
 		}
 	}
 
-	// Wrap our dungeon grid for the Raycaster Camera
-	rayMap := &RayMap{Grid: &gameMap.Grid}
-	camera := raycaster.NewCamera(640, 480, 64, rayMap, rayMap)
-
-	// Pass the generated map and camera into the engine
-	game := &Game{
-		DungeonMap: gameMap,
-		Camera:     camera,
-		PlayerX:    startX,
-		PlayerY:    startY,
-		PlayerA:    0,
+	// Convert map[Node]*Door to map[string]*Door for JSON
+	for node, door := range gameMap.Doors {
+		key := fmt.Sprintf("%d,%d", node.X, node.Y)
+		exportPayload.Doors[key] = door
 	}
 
-	if err := ebiten.RunGame(game); err != nil {
+	mapData, err := json.MarshalIndent(exportPayload, "", "  ")
+	if err != nil {
 		panic(err)
 	}
+	err = os.WriteFile("dungeon_state.json", mapData, 0644)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("\nDungeon state exported to dungeon_state.json")
 }

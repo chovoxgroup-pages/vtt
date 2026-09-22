@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3.5e Character Builder</title>
+    <style>
+        :root {
+            --bg-color: #1a1a24; --panel-bg: #2a2a3a; --accent: #d4af37;
+            --text-main: #e0e0e0; --text-muted: #888; --border-dark: #15151e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color); color: var(--text-main);
+            margin: 0; padding: 20px; display: flex; justify-content: center;
+        }
+        .sheet-container {
+            width: 100%; max-width: 900px; background-color: var(--panel-bg);
+            border: 2px solid var(--accent); border-radius: 8px; padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+        h1, h2, h3 { color: var(--accent); margin-top: 0; border-bottom: 1px solid var(--accent); padding-bottom: 5px; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+        
+        .grid-section { display: grid; gap: 15px; margin-bottom: 25px; }
+        .cols-4 { grid-template-columns: repeat(4, 1fr); }
+        .cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .cols-2 { grid-template-columns: repeat(2, 1fr); }
+        
+        .form-group { display: flex; flex-direction: column; }
+        label { font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; font-weight: bold; }
+        input, select, textarea {
+            background-color: var(--border-dark); border: 1px solid #444;
+            color: var(--text-main); padding: 8px; border-radius: 4px; font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+        
+        .stat-box { background: #222; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #333; }
+        .stat-box input { text-align: center; font-size: 1.2rem; font-weight: bold; width: 60px; margin: 5px auto; }
+        .derived-val { font-size: 1.4rem; font-weight: bold; color: var(--accent); margin-top: 5px; }
+        
+        .pb-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; align-items: center; background: #222; padding: 10px; margin-bottom: 5px; border-radius: 4px; }
+        .pb-row button { background: #444; color: #fff; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
+        .pb-row button:hover { background: var(--accent); color: #000; }
+        
+        .skills-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #222; padding: 15px; border-radius: 6px; }
+        .skill-row { display: grid; grid-template-columns: 2fr 1fr 1fr; align-items: center; border-bottom: 1px solid #333; padding: 4px 0; font-size: 0.9rem; }
+        .skill-row input { width: 45px; text-align: center; padding: 4px; }
+        .skill-total { text-align: right; font-weight: bold; color: var(--accent); padding-right: 10px; }
+        
+        .nav-buttons { display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid #444; padding-top: 15px; }
+        .btn { background-color: #444; color: #fff; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background-color: #666; }
+        .btn-primary { background-color: var(--accent); color: #000; }
+        .btn-primary:hover { background-color: #ffd700; }
+
+        .gold-display { font-size: 1.4rem; font-weight: bold; color: #44ff44; text-align: center; margin-bottom: 20px; padding: 10px; background: #111; border: 1px solid #333; border-radius: 4px; }
+        .inventory-list { font-size: 0.9rem; padding-left: 20px; color: var(--text-main); list-style-type: square; }
+        .remove-btn { color: #ff5555; cursor: pointer; font-weight: bold; margin-left: 8px; }
+    </style>
+</head>
+<body>
+
+    <div class="sheet-container">
+        <h1>Character Forge</h1>
+
+        <!-- STEP 1: IDENTITY & RACE -->
+        <div id="step-1" class="wizard-step active">
+            <h2>Step 1: Identity & Race</h2>
+            <div class="grid-section cols-2">
+                <div class="form-group">
+                    <label>Character Name</label>
+                    <input type="text" id="char-name" placeholder="Name your character...">
+                </div>
+                <div class="form-group">
+                    <label>Alignment</label>
+                    <select id="char-align">
+                        <option value="Lawful Good">Lawful Good</option>
+                        <option value="Neutral Good">Neutral Good</option>
+                        <option value="Chaotic Good">Chaotic Good</option>
+                        <option value="Lawful Neutral">Lawful Neutral</option>
+                        <option value="True Neutral" selected>True Neutral</option>
+                        <option value="Chaotic Neutral">Chaotic Neutral</option>
+                        <option value="Lawful Evil">Lawful Evil</option>
+                        <option value="Neutral Evil">Neutral Evil</option>
+                        <option value="Chaotic Evil">Chaotic Evil</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Race</label>
+                    <select id="char-race"></select>
+                </div>
+                <div class="form-group">
+                    <label>Racial Modifiers</label>
+                    <div id="race-mods-display" style="padding: 8px; background: #222; border-radius: 4px; color: var(--accent);">None</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 2: CLASS & LEVEL -->
+        <div id="step-2" class="wizard-step">
+            <h2>Step 2: Class & Level</h2>
+            <div class="grid-section cols-2">
+                <div class="form-group">
+                    <label>Class</label>
+                    <select id="char-class"></select>
+                </div>
+                <div class="form-group">
+                    <label>Level</label>
+                    <input type="number" id="char-level" value="1" min="1" max="20">
+                </div>
+            </div>
+            <div id="class-info-display" style="padding: 15px; background: #222; border-radius: 4px; font-size: 0.9rem; line-height: 1.4;"></div>
+        </div>
+
+        <!-- STEP 3: ABILITY SCORES -->
+        <div id="step-3" class="wizard-step">
+            <h2>Step 3: Ability Scores (25 Point Buy)</h2>
+            <h3 style="text-align: center; color: #fff;">Points Remaining: <span id="pb-remaining" style="color: var(--accent);">25</span></h3>
+            
+            <div style="display: grid; gap: 10px; margin-top: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; font-weight: bold; color: var(--text-muted); padding: 0 10px;">
+                    <div>Ability</div>
+                    <div>Base Score</div>
+                    <div>Race Mod</div>
+                    <div>Final (Total Mod)</div>
+                </div>
+                <div id="pb-container"></div>
+            </div>
+        </div>
+
+        <!-- STEP 4: COMBAT & DEFENSES -->
+        <div id="step-4" class="wizard-step">
+            <h2>Step 4: Combat & Defenses</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">These baseline values are auto-calculated from your Class, Level, Abilities, and Equipped Armor.</p>
+            
+            <div class="grid-section cols-4">
+                <div class="stat-box">
+                    <label>Max HP</label>
+                    <input type="number" id="combat-hp" value="10">
+                </div>
+                <div class="stat-box">
+                    <label>Speed (ft)</label>
+                    <input type="number" id="combat-speed" value="30">
+                </div>
+                <div class="stat-box">
+                    <label>BAB</label>
+                    <input type="number" id="combat-bab" value="0">
+                </div>
+                <div class="stat-box">
+                    <label>Initiative</label>
+                    <div class="derived-val" id="combat-init">+0</div>
+                </div>
+            </div>
+
+            <div class="grid-section cols-3">
+                <div class="stat-box">
+                    <label>Armor & Shield</label>
+                    <div id="ac-armor-bonus" style="font-size: 1.2rem; font-weight: bold; margin-bottom: 5px;">+0</div>
+                    <label style="margin-top: 5px;">Total Normal AC</label>
+                    <div class="derived-val" id="ac-normal">10</div>
+                </div>
+                <div class="stat-box">
+                    <label>Misc Touch Bonus</label>
+                    <input type="number" id="ac-touch-misc" value="0">
+                    <label style="margin-top: 5px;">Total Touch AC</label>
+                    <div class="derived-val" id="ac-touch">10</div>
+                </div>
+                <div class="stat-box">
+                    <label>Misc Flat Bonus</label>
+                    <input type="number" id="ac-flat-misc" value="0">
+                    <label style="margin-top: 5px;">Total Flat AC</label>
+                    <div class="derived-val" id="ac-flat">10</div>
+                </div>
+            </div>
+
+            <h3>Saving Throws (Base + Stat)</h3>
+            <div class="grid-section cols-3">
+                <div class="stat-box">
+                    <label>Fortitude (CON)</label>
+                    <input type="number" id="save-base-fort" value="0">
+                    <div class="derived-val" id="save-total-fort">+0</div>
+                </div>
+                <div class="stat-box">
+                    <label>Reflex (DEX)</label>
+                    <input type="number" id="save-base-ref" value="0">
+                    <div class="derived-val" id="save-total-ref">+0</div>
+                </div>
+                <div class="stat-box">
+                    <label>Will (WIS)</label>
+                    <input type="number" id="save-base-will" value="0">
+                    <div class="derived-val" id="save-total-will">+0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 5: SKILLS -->
+        <div id="step-5" class="wizard-step">
+            <h2>Step 5: Skill Allocation</h2>
+            <h3 style="text-align: center; color: #fff;">Available Ranks: <span id="skill-points-display" style="color: var(--accent);">0</span></h3>
+            <p style="text-align: center; font-size: 0.85rem; color: var(--text-muted);">Max Ranks per skill: <span id="max-ranks-display">4</span> (Level + 3)</p>
+            <p style="text-align: center; font-size: 0.85rem; color: #ff5555;">Current Armor Check Penalty: <span id="acp-display">0</span></p>
+            
+            <div class="skills-container" id="skills-list"></div>
+        </div>
+
+        <!-- STEP 6: FEATS -->
+        <div id="step-6" class="wizard-step">
+            <h2>Step 6: Feats & Special Abilities</h2>
+            <p style="font-size: 0.85rem; margin-top: 0;">Base Feats Available: <span id="feats-count-display" style="color: var(--accent); font-weight: bold; font-size: 1.1rem;">1</span> <small style="color: var(--text-muted);">(Includes Human bonus. Add class bonus feats manually.)</small></p>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <select id="feat-selector" size="10" style="width: 100%; height: 200px;"></select>
+            </div>
+            <button class="btn" id="btn-add-feat" style="width: 100%; margin-bottom: 15px;">Add Selected Feat</button>
+            <ul id="selected-feats-list" class="inventory-list"></ul>
+        </div>
+
+        <!-- STEP 7: INVENTORY & WEALTH -->
+        <div id="step-7" class="wizard-step">
+            <h2>Step 7: Equipment & Wealth</h2>
+            <div class="gold-display">Remaining Wealth: <span id="gold-remaining">0</span> gp</div>
+            
+            <div class="grid-section cols-2">
+                <div>
+                    <h3>Equipped Gear</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">Equipping items automatically deducts their cost from your wealth.</p>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label>Weapon</label>
+                        <select id="gear-weapon"></select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label>Armor</label>
+                        <select id="gear-armor"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Shield</label>
+                        <select id="gear-shield"></select>
+                    </div>
+                </div>
+                <div>
+                    <h3>Backpack / Other Inventory</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">Purchase additional items for your inventory.</p>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <select id="item-selector"></select>
+                    </div>
+                    <button class="btn" id="btn-add-item" style="width: 100%; margin-bottom: 15px;">Buy Item</button>
+                    <ul id="inventory-list" class="inventory-list"></ul>
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px; text-align: center;">
+                <h3 style="color: #fff;">Ready to enter the dungeon?</h3>
+                <button class="btn btn-primary" id="btn-save" style="width: 100%; padding: 15px; font-size: 1.2rem;">Finalize & Save to Firebase</button>
+            </div>
+        </div>
+
+        <!-- WIZARD NAVIGATION -->
+        <div class="nav-buttons">
+            <button class="btn" id="btn-prev" style="visibility: hidden;">&laquo; Previous Step</button>
+            <button class="btn btn-primary" id="btn-next">Next Step &raquo;</button>
+        </div>
+
+    </div>
+
+    <!-- FIREBASE & LOGIC SCRIPT -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCZsi52vnXECw-7ZJaXdtkH-flLhZbzffk",
+            authDomain: "vtt76-4876c.firebaseapp.com",
+            databaseURL: "https://vtt76-4876c-default-rtdb.firebaseio.com",
+            projectId: "vtt76-4876c",
+            storageBucket: "vtt76-4876c.firebasestorage.app",
+            messagingSenderId: "313342233664",
+            appId: "1:313342233664:web:4cf91cd555ddcfabbf63a5"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // --- FULL RACES (19) ---
+        const races = {
+            "race_human": { name: "Human", speed: 30, mods: {} },
+            "race_dwarf_hill": { name: "Dwarf (Hill)", speed: 20, mods: { con: 2, cha: -2 } },
+            "race_dwarf_deep": { name: "Dwarf (Deep)", speed: 20, mods: { con: 2, cha: -2 } },
+            "race_dwarf_duergar": { name: "Dwarf (Duergar)", speed: 20, mods: { con: 2, cha: -4 } },
+            "race_dwarf_gold": { name: "Dwarf (Gold)", speed: 20, mods: { con: 2, dex: -2 } },
+            "race_elf_high": { name: "Elf (High)", speed: 30, mods: { dex: 2, con: -2 } },
+            "race_elf_aquatic": { name: "Elf (Aquatic)", speed: 30, mods: { dex: 2, int: -2 } },
+            "race_elf_drow": { name: "Elf (Drow)", speed: 30, mods: { dex: 2, con: -2, int: 2, cha: 2 } },
+            "race_elf_gray": { name: "Elf (Gray)", speed: 30, mods: { dex: 2, con: -2, int: 2, str: -2 } },
+            "race_elf_wild": { name: "Elf (Wild)", speed: 30, mods: { dex: 2, int: -2 } },
+            "race_elf_wood": { name: "Elf (Wood)", speed: 30, mods: { dex: 2, con: -2, str: 2, int: -2 } },
+            "race_gnome_rock": { name: "Gnome (Rock)", speed: 20, mods: { con: 2, str: -2 } },
+            "race_gnome_svirfneblin": { name: "Gnome (Svirfneblin)", speed: 20, mods: { dex: 2, wis: 2, str: -2, cha: -4 } },
+            "race_gnome_forest": { name: "Gnome (Forest)", speed: 20, mods: { con: 2, str: -2 } },
+            "race_half_elf": { name: "Half-Elf", speed: 30, mods: {} },
+            "race_half_orc": { name: "Half-Orc", speed: 30, mods: { str: 2, int: -2, cha: -2 } },
+            "race_halfling_lightfoot": { name: "Halfling (Lightfoot)", speed: 20, mods: { dex: 2, str: -2 } },
+            "race_halfling_tallfellow": { name: "Halfling (Tallfellow)", speed: 20, mods: { dex: 2, str: -2 } },
+            "race_halfling_deep": { name: "Halfling (Deep)", speed: 20, mods: { dex: 2, str: -2 } }
+        };
+
+        // --- FULL CORE CLASSES (11) ---
+        const classes = {
+            "cls_barbarian": { name: "Barbarian", hd: 12, skills: 4, bab: "Full", fort: "Good", ref: "Poor", will: "Poor", maxGold: 160 },
+            "cls_bard": { name: "Bard", hd: 6, skills: 6, bab: "Average", fort: "Poor", ref: "Good", will: "Good", maxGold: 160 },
+            "cls_cleric": { name: "Cleric", hd: 8, skills: 2, bab: "Average", fort: "Good", ref: "Poor", will: "Good", maxGold: 200 },
+            "cls_druid": { name: "Druid", hd: 8, skills: 4, bab: "Average", fort: "Good", ref: "Poor", will: "Good", maxGold: 80 },
+            "cls_fighter": { name: "Fighter", hd: 10, skills: 2, bab: "Full", fort: "Good", ref: "Poor", will: "Poor", maxGold: 240 },
+            "cls_monk": { name: "Monk", hd: 8, skills: 4, bab: "Average", fort: "Good", ref: "Good", will: "Good", maxGold: 20 },
+            "cls_paladin": { name: "Paladin", hd: 10, skills: 2, bab: "Full", fort: "Good", ref: "Poor", will: "Poor", maxGold: 240 },
+            "cls_ranger": { name: "Ranger", hd: 8, skills: 6, bab: "Full", fort: "Good", ref: "Good", will: "Poor", maxGold: 240 },
+            "cls_rogue": { name: "Rogue", hd: 6, skills: 8, bab: "Average", fort: "Poor", ref: "Good", will: "Poor", maxGold: 200 },
+            "cls_sorcerer": { name: "Sorcerer", hd: 4, skills: 2, bab: "Poor", fort: "Poor", ref: "Poor", will: "Good", maxGold: 120 },
+            "cls_wizard": { name: "Wizard", hd: 4, skills: 2, bab: "Poor", fort: "Poor", ref: "Poor", will: "Good", maxGold: 120 }
+        };
+
+        // --- FULL SKILLS (42) ---
+        const skillsData = [
+            { id: 'appraise', name: 'Appraise', key: 'int', acp: false }, { id: 'autohypnosis', name: 'Autohypnosis', key: 'wis', acp: false },
+            { id: 'balance', name: 'Balance', key: 'dex', acp: true }, { id: 'bluff', name: 'Bluff', key: 'cha', acp: false },
+            { id: 'climb', name: 'Climb', key: 'str', acp: true }, { id: 'concentration', name: 'Concentration', key: 'con', acp: false },
+            { id: 'control_shape', name: 'Control Shape', key: 'wis', acp: false }, { id: 'craft', name: 'Craft', key: 'int', acp: false },
+            { id: 'decipher_script', name: 'Decipher Script', key: 'int', acp: false }, { id: 'diplomacy', name: 'Diplomacy', key: 'cha', acp: false },
+            { id: 'disable_device', name: 'Disable Device', key: 'int', acp: false }, { id: 'disguise', name: 'Disguise', key: 'cha', acp: false },
+            { id: 'escape_artist', name: 'Escape Artist', key: 'dex', acp: true }, { id: 'forgery', name: 'Forgery', key: 'int', acp: false },
+            { id: 'gather_information', name: 'Gather Info', key: 'cha', acp: false }, { id: 'handle_animal', name: 'Handle Animal', key: 'cha', acp: false },
+            { id: 'heal', name: 'Heal', key: 'wis', acp: false }, { id: 'hide', name: 'Hide', key: 'dex', acp: true },
+            { id: 'intimidate', name: 'Intimidate', key: 'cha', acp: false }, { id: 'jump', name: 'Jump', key: 'str', acp: true },
+            { id: 'knowledge', name: 'Knowledge', key: 'int', acp: false }, { id: 'listen', name: 'Listen', key: 'wis', acp: false },
+            { id: 'martial_lore', name: 'Martial Lore', key: 'int', acp: false }, { id: 'move_silently', name: 'Move Silently', key: 'dex', acp: true },
+            { id: 'open_lock', name: 'Open Lock', key: 'dex', acp: false }, { id: 'perform', name: 'Perform', key: 'cha', acp: false },
+            { id: 'profession', name: 'Profession', key: 'wis', acp: false }, { id: 'psicraft', name: 'Psicraft', key: 'int', acp: false },
+            { id: 'ride', name: 'Ride', key: 'dex', acp: false }, { id: 'search', name: 'Search', key: 'int', acp: false },
+            { id: 'sense_motive', name: 'Sense Motive', key: 'wis', acp: false }, { id: 'sleight_of_hand', name: 'Sleight of Hand', key: 'dex', acp: true },
+            { id: 'speak_language', name: 'Speak Language', key: 'none', acp: false }, { id: 'spellcraft', name: 'Spellcraft', key: 'int', acp: false },
+            { id: 'spot', name: 'Spot', key: 'wis', acp: false }, { id: 'survival', name: 'Survival', key: 'wis', acp: false },
+            { id: 'swim', name: 'Swim', key: 'str', acp: true }, { id: 'truespeak', name: 'Truespeak', key: 'int', acp: false },
+            { id: 'tumble', name: 'Tumble', key: 'dex', acp: true }, { id: 'use_magic_device', name: 'Use Magic Device', key: 'cha', acp: false },
+            { id: 'use_psionic_device', name: 'Use Psionic Device', key: 'cha', acp: false }, { id: 'use_rope', name: 'Use Rope', key: 'dex', acp: false }
+        ];
+
+        // --- FULL FEATS LIST ---
+        const featsData = [
+            { id: 'feat_acrobatic', name: 'Acrobatic', prereq: '-' }, { id: 'feat_agile', name: 'Agile', prereq: '-' },
+            { id: 'feat_alertness', name: 'Alertness', prereq: '-' }, { id: 'feat_animal_affinity', name: 'Animal Affinity', prereq: '-' },
+            { id: 'feat_armor_prof_light', name: 'Armor Proficiency (Light)', prereq: '-' }, { id: 'feat_armor_prof_medium', name: 'Armor Proficiency (Medium)', prereq: 'Armor Proficiency (light)' },
+            { id: 'feat_armor_prof_heavy', name: 'Armor Proficiency (Heavy)', prereq: 'Armor Proficiency (light), Armor Proficiency (medium)' },
+            { id: 'feat_athletic', name: 'Athletic', prereq: '-' }, { id: 'feat_augment_summoning', name: 'Augment Summoning', prereq: 'Spell Focus (conjuration)' },
+            { id: 'feat_blind_fight', name: 'Blind-Fight', prereq: '-' }, { id: 'feat_brew_potion', name: 'Brew Potion', prereq: 'Caster level 3rd' },
+            { id: 'feat_cleave', name: 'Cleave', prereq: 'Str 13, Power Attack' }, { id: 'feat_cleave_great', name: 'Cleave, Great', prereq: 'Str 13, Cleave, Power Attack, base attack bonus +4' },
+            { id: 'feat_combat_casting', name: 'Combat Casting', prereq: '-' }, { id: 'feat_combat_expertise', name: 'Combat Expertise', prereq: 'Int 13' },
+            { id: 'feat_combat_reflexes', name: 'Combat Reflexes', prereq: '-' }, { id: 'feat_craft_magic_arms', name: 'Craft Magic Arms and Armor', prereq: 'Caster level 5th' },
+            { id: 'feat_craft_rod', name: 'Craft Rod', prereq: 'Caster level 9th' }, { id: 'feat_craft_staff', name: 'Craft Staff', prereq: 'Caster level 12th' },
+            { id: 'feat_craft_wand', name: 'Craft Wand', prereq: 'Caster level 5th' }, { id: 'feat_craft_wondrous_item', name: 'Craft Wondrous Item', prereq: 'Caster level 3rd' },
+            { id: 'feat_deceitful', name: 'Deceitful', prereq: '-' }, { id: 'feat_deflect_arrows', name: 'Deflect Arrows', prereq: 'Dex 13, Improved Unarmed Strike' },
+            { id: 'feat_deft_hands', name: 'Deft Hands', prereq: '-' }, { id: 'feat_diehard', name: 'Diehard', prereq: 'Endurance' },
+            { id: 'feat_diligent', name: 'Diligent', prereq: '-' }, { id: 'feat_dodge', name: 'Dodge', prereq: 'Dex 13' },
+            { id: 'feat_empower_spell', name: 'Empower Spell', prereq: '-' }, { id: 'feat_endurance', name: 'Endurance', prereq: '-' },
+            { id: 'feat_enlarge_spell', name: 'Enlarge Spell', prereq: '-' }, { id: 'feat_eschew_materials', name: 'Eschew Materials', prereq: '-' },
+            { id: 'feat_exotic_weapon_prof', name: 'Exotic Weapon Proficiency', prereq: 'Base attack bonus +1' }, { id: 'feat_extend_spell', name: 'Extend Spell', prereq: '-' },
+            { id: 'feat_extra_turning', name: 'Extra Turning', prereq: 'Ability to turn or rebuke creatures' }, { id: 'feat_far_shot', name: 'Far Shot', prereq: 'Point Blank Shot' },
+            { id: 'feat_forge_ring', name: 'Forge Ring', prereq: 'Caster level 12th' }, { id: 'feat_great_fortitude', name: 'Great Fortitude', prereq: '-' },
+            { id: 'feat_heighten_spell', name: 'Heighten Spell', prereq: '-' }, { id: 'feat_improved_bull_rush', name: 'Improved Bull Rush', prereq: 'Str 13, Power Attack' },
+            { id: 'feat_improved_counterspell', name: 'Improved Counterspell', prereq: '-' }, { id: 'feat_improved_critical', name: 'Improved Critical', prereq: 'Base attack bonus +8' },
+            { id: 'feat_improved_disarm', name: 'Improved Disarm', prereq: 'Int 13, Combat Expertise' }, { id: 'feat_improved_familiar', name: 'Improved Familiar', prereq: 'Ability to acquire familiar' },
+            { id: 'feat_improved_feint', name: 'Improved Feint', prereq: 'Int 13, Combat Expertise' }, { id: 'feat_improved_grapple', name: 'Improved Grapple', prereq: 'Dex 13, Improved Unarmed Strike' },
+            { id: 'feat_improved_initiative', name: 'Improved Initiative', prereq: '-' }, { id: 'feat_improved_overrun', name: 'Improved Overrun', prereq: 'Str 13, Power Attack' },
+            { id: 'feat_improved_precise_shot', name: 'Improved Precise Shot', prereq: 'Dex 19, Point Blank Shot, Precise Shot, base attack bonus +11' }, { id: 'feat_improved_shield_bash', name: 'Improved Shield Bash', prereq: 'Shield Proficiency' },
+            { id: 'feat_improved_sunder', name: 'Improved Sunder', prereq: 'Str 13, Power Attack' }, { id: 'feat_improved_trip', name: 'Improved Trip', prereq: 'Int 13, Combat Expertise' },
+            { id: 'feat_improved_turning', name: 'Improved Turning', prereq: 'Ability to turn or rebuke creatures' }, { id: 'feat_improved_two_weapon_fighting', name: 'Improved Two-Weapon Fighting', prereq: 'Dex 17, Two-Weapon Fighting, base attack bonus +6' },
+            { id: 'feat_improved_unarmed_strike', name: 'Improved Unarmed Strike', prereq: '-' }, { id: 'feat_investigator', name: 'Investigator', prereq: '-' },
+            { id: 'feat_iron_will', name: 'Iron Will', prereq: '-' }, { id: 'feat_leadership', name: 'Leadership', prereq: 'Character level 6th' },
+            { id: 'feat_lightning_reflexes', name: 'Lightning Reflexes', prereq: '-' }, { id: 'feat_magical_aptitude', name: 'Magical Aptitude', prereq: '-' },
+            { id: 'feat_manyshot', name: 'Manyshot', prereq: 'Dex 17, Point Blank Shot, Rapid Shot, base attack bonus +6' }, { id: 'feat_martial_weapon_prof', name: 'Martial Weapon Proficiency', prereq: '-' },
+            { id: 'feat_maximize_spell', name: 'Maximize Spell', prereq: '-' }, { id: 'feat_mobility', name: 'Mobility', prereq: 'Dex 13, Dodge' },
+            { id: 'feat_mounted_archery', name: 'Mounted Archery', prereq: 'Ride 1 rank, Mounted Combat' }, { id: 'feat_mounted_combat', name: 'Mounted Combat', prereq: 'Ride 1 rank' },
+            { id: 'feat_natural_spell', name: 'Natural Spell', prereq: 'Wis 13, wild shape ability' }, { id: 'feat_negotiator', name: 'Negotiator', prereq: '-' },
+            { id: 'feat_nimble_fingers', name: 'Nimble Fingers', prereq: '-' }, { id: 'feat_persuasive', name: 'Persuasive', prereq: '-' },
+            { id: 'feat_point_blank_shot', name: 'Point Blank Shot', prereq: '-' }, { id: 'feat_power_attack', name: 'Power Attack', prereq: 'Str 13' },
+            { id: 'feat_precise_shot', name: 'Precise Shot', prereq: 'Point Blank Shot' }, { id: 'feat_quick_draw', name: 'Quick Draw', prereq: 'Base attack bonus +1' },
+            { id: 'feat_quicken_spell', name: 'Quicken Spell', prereq: '-' }, { id: 'feat_rapid_reload', name: 'Rapid Reload', prereq: '-' },
+            { id: 'feat_rapid_shot', name: 'Rapid Shot', prereq: 'Dex 13, Point Blank Shot' }, { id: 'feat_ride_by_attack', name: 'Ride-By Attack', prereq: 'Ride 1 rank, Mounted Combat' },
+            { id: 'feat_run', name: 'Run', prereq: '-' }, { id: 'feat_scribe_scroll', name: 'Scribe Scroll', prereq: 'Caster level 1st' },
+            { id: 'feat_self_sufficient', name: 'Self-Sufficient', prereq: '-' }, { id: 'feat_shield_proficiency', name: 'Shield Proficiency', prereq: '-' },
+            { id: 'feat_shot_on_the_run', name: 'Shot on the Run', prereq: 'Dex 13, Dodge, Mobility, Point Blank Shot, base attack bonus +4' }, { id: 'feat_silent_spell', name: 'Silent Spell', prereq: '-' },
+            { id: 'feat_simple_weapon_prof', name: 'Simple Weapon Proficiency', prereq: '-' }, { id: 'feat_skill_focus', name: 'Skill Focus', prereq: 'Choose a skill' },
+            { id: 'feat_snatch_arrows', name: 'Snatch Arrows', prereq: 'Dex 15, Deflect Arrows, Improved Unarmed Strike' }, { id: 'feat_spell_focus', name: 'Spell Focus', prereq: 'Choose a school of magic' },
+            { id: 'feat_spell_focus_greater', name: 'Spell Focus, Greater', prereq: 'Spell Focus' }, { id: 'feat_spell_mastery', name: 'Spell Mastery', prereq: 'Wizard level 1st' },
+            { id: 'feat_spell_penetration', name: 'Spell Penetration', prereq: '-' }, { id: 'feat_spell_penetration_greater', name: 'Spell Penetration, Greater', prereq: 'Spell Penetration' },
+            { id: 'feat_spirited_charge', name: 'Spirited Charge', prereq: 'Ride 1 rank, Mounted Combat, Ride-By Attack' }, { id: 'feat_spring_attack', name: 'Spring Attack', prereq: 'Dex 13, Dodge, Mobility, base attack bonus +4' },
+            { id: 'feat_stealthy', name: 'Stealthy', prereq: '-' }, { id: 'feat_still_spell', name: 'Still Spell', prereq: '-' },
+            { id: 'feat_stunning_fist', name: 'Stunning Fist', prereq: 'Dex 13, Wis 13, Improved Unarmed Strike, base attack bonus +8' }, { id: 'feat_toughness', name: 'Toughness', prereq: '-' },
+            { id: 'feat_tower_shield_prof', name: 'Tower Shield Proficiency', prereq: 'Shield Proficiency' }, { id: 'feat_track', name: 'Track', prereq: '-' },
+            { id: 'feat_trample', name: 'Trample', prereq: 'Ride 1 rank, Mounted Combat' }, { id: 'feat_two_weapon_defense', name: 'Two-Weapon Defense', prereq: 'Dex 15, Two-Weapon Fighting' },
+            { id: 'feat_two_weapon_fighting', name: 'Two-Weapon Fighting', prereq: 'Dex 15' }, { id: 'feat_two_weapon_fighting_greater', name: 'Two-Weapon Fighting, Greater', prereq: 'Dex 19, Improved Two-Weapon Fighting, base attack bonus +11' },
+            { id: 'feat_weapon_finesse', name: 'Weapon Finesse', prereq: 'Base attack bonus +1' }, { id: 'feat_weapon_focus', name: 'Weapon Focus', prereq: 'Base attack bonus +1' },
+            { id: 'feat_weapon_focus_greater', name: 'Weapon Focus, Greater', prereq: 'Weapon Focus, fighter level 8th' }, { id: 'feat_weapon_specialization', name: 'Weapon Specialization', prereq: 'Fighter level 4th' },
+            { id: 'feat_weapon_specialization_greater', name: 'Weapon Specialization, Greater', prereq: 'Fighter level 12th' }, { id: 'feat_whirlwind_attack', name: 'Whirlwind Attack', prereq: 'Dex 13, Int 13, Combat Expertise, Dodge, Mobility, Spring Attack, base attack bonus +4' },
+            { id: 'feat_widen_spell', name: 'Widen Spell', prereq: '-' }, { id: 'feat_ability_focus', name: 'Ability Focus', prereq: 'Special attack' },
+            { id: 'feat_awesome_blow', name: 'Awesome Blow', prereq: 'Str 25, Power Attack, Improved Bull Rush, Large size' }, { id: 'feat_craft_construct', name: 'Craft Construct', prereq: 'Craft Magic Arms and Armor, Craft Wondrous Item' },
+            { id: 'feat_empower_sla', name: 'Empower Spell-Like Ability', prereq: 'Caster level 6th' }, { id: 'feat_flyby_attack', name: 'Flyby Attack', prereq: 'Fly speed' },
+            { id: 'feat_hover', name: 'Hover', prereq: 'Fly speed' }, { id: 'feat_improved_natural_armor', name: 'Improved Natural Armor', prereq: 'Natural armor, Con 13' },
+            { id: 'feat_improved_natural_attack', name: 'Improved Natural Attack', prereq: 'Natural weapon, base attack bonus +4' }, { id: 'feat_multiattack', name: 'Multiattack', prereq: 'Three or more natural attacks' },
+            { id: 'feat_multiweapon_fighting', name: 'Multiweapon Fighting', prereq: 'Dex 13, three or more hands' }, { id: 'feat_quicken_sla', name: 'Quicken Spell-Like Ability', prereq: 'Caster level 10th' },
+            { id: 'feat_snatch', name: 'Snatch', prereq: 'Huge size or larger' }, { id: 'feat_wingover', name: 'Wingover', prereq: 'Fly speed' },
+            { id: 'feat_aligned_attack', name: 'Aligned Attack', prereq: 'Base attack bonus +6' }, { id: 'feat_antipsionic_magic', name: 'Antipsionic Magic', prereq: 'Spellcraft 5 ranks' },
+            { id: 'feat_autonomous', name: 'Autonomous', prereq: '-' }, { id: 'feat_body_fuel', name: 'Body Fuel', prereq: '-' },
+            { id: 'feat_boost_construct', name: 'Boost Construct', prereq: '-' }, { id: 'feat_burrowing_power', name: 'Burrowing Power', prereq: '-' },
+            { id: 'feat_chain_power', name: 'Chain Power', prereq: '-' }, { id: 'feat_chaotic_mind', name: 'Chaotic Mind', prereq: 'Chaotic alignment, Cha 15' },
+            { id: 'feat_cloak_dance', name: 'Cloak Dance', prereq: 'Hide 10 ranks, Perform 2 ranks' }, { id: 'feat_closed_mind', name: 'Closed Mind', prereq: '-' },
+            { id: 'feat_combat_manifestation', name: 'Combat Manifestation', prereq: '-' }, { id: 'feat_craft_cognizance_crystal', name: 'Craft Cognizance Crystal', prereq: 'Manifester level 3rd' },
+            { id: 'feat_craft_dorje', name: 'Craft Dorje', prereq: 'Manifester level 5th' }, { id: 'feat_craft_psicrown', name: 'Craft Psicrown', prereq: 'Manifester level 12th' },
+            { id: 'feat_craft_psionic_arms', name: 'Craft Psionic Arms and Armor', prereq: 'Manifester level 5th' }, { id: 'feat_craft_psionic_construct', name: 'Craft Psionic Construct', prereq: 'Craft Psionic Arms, Craft Universal Item' },
+            { id: 'feat_craft_universal_item', name: 'Craft Universal Item', prereq: 'Manifester level 3rd' }, { id: 'feat_deadly_precision', name: 'Deadly Precision', prereq: 'Dex 15, base attack bonus +5' },
+            { id: 'feat_deep_impact', name: 'Deep Impact', prereq: 'Str 13, Psionic Weapon, base attack bonus +5' }, { id: 'feat_delay_power', name: 'Delay Power', prereq: '-' },
+            { id: 'feat_empower_power', name: 'Empower Power', prereq: '-' }, { id: 'feat_enlarge_power', name: 'Enlarge Power', prereq: '-' },
+            { id: 'feat_expanded_knowledge', name: 'Expanded Knowledge', prereq: 'Manifester level 3rd' }, { id: 'feat_extend_power', name: 'Extend Power', prereq: '-' },
+            { id: 'feat_fell_shot', name: 'Fell Shot', prereq: 'Dex 13, Point Blank Shot, Psionic Shot, base attack bonus +5' }, { id: 'feat_focused_sunder', name: 'Focused Sunder', prereq: 'Str 13, Power Attack, Improved Sunder' },
+            { id: 'feat_force_of_will', name: 'Force of Will', prereq: 'Iron Will' }, { id: 'feat_ghost_attack', name: 'Ghost Attack', prereq: 'Base attack bonus +3' },
+            { id: 'feat_greater_manyshot', name: 'Greater Manyshot', prereq: 'Dex 17, Manyshot, Point Blank Shot, Rapid Shot, base attack bonus +6' }, { id: 'feat_greater_power_pen', name: 'Greater Power Penetration', prereq: 'Power Penetration' },
+            { id: 'feat_greater_power_spec', name: 'Greater Power Specialization', prereq: 'Power Specialization, Weapon Focus (ray), manifester level 12th' }, { id: 'feat_greater_psionic_endow', name: 'Greater Psionic Endowment', prereq: 'Psionic Endowment' },
+            { id: 'feat_greater_psionic_fist', name: 'Greater Psionic Fist', prereq: 'Str 13, Psionic Fist, base attack bonus +5' }, { id: 'feat_greater_psionic_shot', name: 'Greater Psionic Shot', prereq: 'Point Blank Shot, Psionic Shot, base attack bonus +5' },
+            { id: 'feat_greater_psionic_weapon', name: 'Greater Psionic Weapon', prereq: 'Str 13, Psionic Weapon, base attack bonus +5' }, { id: 'feat_hostile_mind', name: 'Hostile Mind', prereq: 'Cha 15' },
+            { id: 'feat_imprint_stone', name: 'Imprint Stone', prereq: 'Manifester level 1st' }, { id: 'feat_improved_psicrystal', name: 'Improved Psicrystal', prereq: 'Psicrystal Affinity' },
+            { id: 'feat_inquisitor', name: 'Inquisitor', prereq: 'Wis 13' }, { id: 'feat_maximize_power', name: 'Maximize Power', prereq: '-' },
+            { id: 'feat_mental_leap', name: 'Mental Leap', prereq: 'Str 13, Jump 5 ranks' }, { id: 'feat_mental_resistance', name: 'Mental Resistance', prereq: 'Base Will save bonus +2' },
+            { id: 'feat_metamorphic_transfer', name: 'Metamorphic Transfer', prereq: 'Wis 13, manifester level 5th' }, { id: 'feat_mind_over_body', name: 'Mind Over Body', prereq: 'Con 13' },
+            { id: 'feat_narrow_mind', name: 'Narrow Mind', prereq: 'Wis 13' }, { id: 'feat_open_minded', name: 'Open Minded', prereq: '-' },
+            { id: 'feat_opportunity_power', name: 'Opportunity Power', prereq: '-' }, { id: 'feat_overchannel', name: 'Overchannel', prereq: '-' },
+            { id: 'feat_power_penetration', name: 'Power Penetration', prereq: '-' }, { id: 'feat_power_specialization', name: 'Power Specialization', prereq: 'Weapon Focus (ray), manifester level 4th' },
+            { id: 'feat_psicrystal_affinity', name: 'Psicrystal Affinity', prereq: 'Manifester level 1st' }, { id: 'feat_psicrystal_containment', name: 'Psicrystal Containment', prereq: 'Psicrystal Affinity, manifester level 3rd' },
+            { id: 'feat_psionic_affinity', name: 'Psionic Affinity', prereq: '-' }, { id: 'feat_psionic_body', name: 'Psionic Body', prereq: '-' },
+            { id: 'feat_psionic_charge', name: 'Psionic Charge', prereq: 'Dex 13, Speed of Thought' }, { id: 'feat_psionic_dodge', name: 'Psionic Dodge', prereq: 'Dex 13, Dodge' },
+            { id: 'feat_psionic_endowment', name: 'Psionic Endowment', prereq: '-' }, { id: 'feat_psionic_fist', name: 'Psionic Fist', prereq: 'Str 13' },
+            { id: 'feat_psionic_hole', name: 'Psionic Hole', prereq: 'Con 15' }, { id: 'feat_psionic_meditation', name: 'Psionic Meditation', prereq: 'Wis 13, Concentration 7 ranks' },
+            { id: 'feat_psionic_shot', name: 'Psionic Shot', prereq: 'Point Blank Shot' }, { id: 'feat_psionic_talent', name: 'Psionic Talent', prereq: 'Having a power point reserve' },
+            { id: 'feat_psionic_weapon', name: 'Psionic Weapon', prereq: 'Str 13' }, { id: 'feat_quicken_power', name: 'Quicken Power', prereq: '-' },
+            { id: 'feat_rapid_metabolism', name: 'Rapid Metabolism', prereq: 'Con 13' }, { id: 'feat_reckless_offense', name: 'Reckless Offense', prereq: 'Base attack bonus +1' },
+            { id: 'feat_return_shot', name: 'Return Shot', prereq: 'Point Blank Shot, Psionic Shot, Fell Shot, base attack bonus +3' }, { id: 'feat_scribe_tattoo', name: 'Scribe Tattoo', prereq: 'Manifester level 3rd' },
+            { id: 'feat_sidestep_charge', name: 'Sidestep Charge', prereq: 'Dex 13, Dodge' }, { id: 'feat_speed_of_thought', name: 'Speed of Thought', prereq: 'Wis 13' },
+            { id: 'feat_split_psionic_ray', name: 'Split Psionic Ray', prereq: 'Any other metapsionic feat' }, { id: 'feat_stand_still', name: 'Stand Still', prereq: 'Str 13' },
+            { id: 'feat_talented', name: 'Talented', prereq: 'Overchannel' }, { id: 'feat_twin_power', name: 'Twin Power', prereq: '-' },
+            { id: 'feat_unavoidable_strike', name: 'Unavoidable Strike', prereq: 'Str 13, Psionic Fist, base attack bonus +5' }, { id: 'feat_unconditional_power', name: 'Unconditional Power', prereq: '-' },
+            { id: 'feat_up_the_walls', name: 'Up the Walls', prereq: 'Wis 13' }, { id: 'feat_widen_power', name: 'Widen Power', prereq: '-' },
+            { id: 'feat_wild_talent', name: 'Wild Talent', prereq: '-' }, { id: 'feat_wounding_attack', name: 'Wounding Attack', prereq: 'Base attack bonus +8' }
+        ];
+
+        // --- FULL WEAPONS LIST ---
+        const weaponsData = [
+            { id: "wpn_unarmed", name: "Unarmed Strike (1d3)", damage: "1d3", crit: "x2", cost: 0 },
+            { id: "wpn_gauntlet", name: "Gauntlet (1d3) [2 gp]", damage: "1d3", crit: "x2", cost: 2 },
+            { id: "wpn_dagger", name: "Dagger (1d4) [2 gp]", damage: "1d4", crit: "19-20/x2", cost: 2 },
+            { id: "wpn_dagger_punch", name: "Punching Dagger (1d4) [2 gp]", damage: "1d4", crit: "x3", cost: 2 },
+            { id: "wpn_gauntlet_spike", name: "Spiked Gauntlet (1d4) [5 gp]", damage: "1d4", crit: "x2", cost: 5 },
+            { id: "wpn_mace_light", name: "Light Mace (1d6) [5 gp]", damage: "1d6", crit: "x2", cost: 5 },
+            { id: "wpn_sickle", name: "Sickle (1d6) [6 gp]", damage: "1d6", crit: "x2", cost: 6 },
+            { id: "wpn_club", name: "Club (1d6) [0 gp]", damage: "1d6", crit: "x2", cost: 0 },
+            { id: "wpn_mace_heavy", name: "Heavy Mace (1d8) [12 gp]", damage: "1d8", crit: "x2", cost: 12 },
+            { id: "wpn_morningstar", name: "Morningstar (1d8) [8 gp]", damage: "1d8", crit: "x2", cost: 8 },
+            { id: "wpn_shortspear", name: "Shortspear (1d6) [1 gp]", damage: "1d6", crit: "x2", cost: 1 },
+            { id: "wpn_longspear", name: "Longspear (1d8) [5 gp]", damage: "1d8", crit: "x3", cost: 5 },
+            { id: "wpn_quarterstaff", name: "Quarterstaff (1d6/1d6) [0 gp]", damage: "1d6/1d6", crit: "x2", cost: 0 },
+            { id: "wpn_spear", name: "Spear (1d8) [2 gp]", damage: "1d8", crit: "x3", cost: 2 },
+            { id: "wpn_crossbow_heavy", name: "Heavy Crossbow (1d10) [50 gp]", damage: "1d10", crit: "19-20/x2", cost: 50 },
+            { id: "wpn_crossbow_light", name: "Light Crossbow (1d8) [35 gp]", damage: "1d8", crit: "19-20/x2", cost: 35 },
+            { id: "wpn_dart", name: "Dart (1d4) [5 sp]", damage: "1d4", crit: "x2", cost: 0.5 },
+            { id: "wpn_javelin", name: "Javelin (1d6) [1 gp]", damage: "1d6", crit: "x2", cost: 1 },
+            { id: "wpn_sling", name: "Sling (1d4) [0 gp]", damage: "1d4", crit: "x2", cost: 0 },
+            { id: "wpn_axe_throw", name: "Throwing Axe (1d6) [8 gp]", damage: "1d6", crit: "x2", cost: 8 },
+            { id: "wpn_hammer_light", name: "Light Hammer (1d4) [1 gp]", damage: "1d4", crit: "x2", cost: 1 },
+            { id: "wpn_handaxe", name: "Handaxe (1d6) [6 gp]", damage: "1d6", crit: "x3", cost: 6 },
+            { id: "wpn_kukri", name: "Kukri (1d4) [8 gp]", damage: "1d4", crit: "18-20/x2", cost: 8 },
+            { id: "wpn_pick_light", name: "Light Pick (1d4) [4 gp]", damage: "1d4", crit: "x4", cost: 4 },
+            { id: "wpn_sap", name: "Sap (1d6) [1 gp]", damage: "1d6", crit: "x2", cost: 1 },
+            { id: "wpn_sword_short", name: "Short Sword (1d6) [10 gp]", damage: "1d6", crit: "19-20/x2", cost: 10 },
+            { id: "wpn_battleaxe", name: "Battleaxe (1d8) [10 gp]", damage: "1d8", crit: "x3", cost: 10 },
+            { id: "wpn_flail", name: "Flail (1d8) [8 gp]", damage: "1d8", crit: "x2", cost: 8 },
+            { id: "wpn_longsword", name: "Longsword (1d8) [15 gp]", damage: "1d8", crit: "19-20/x2", cost: 15 },
+            { id: "wpn_pick_heavy", name: "Heavy Pick (1d6) [8 gp]", damage: "1d6", crit: "x4", cost: 8 },
+            { id: "wpn_rapier", name: "Rapier (1d6) [20 gp]", damage: "1d6", crit: "18-20/x2", cost: 20 },
+            { id: "wpn_scimitar", name: "Scimitar (1d6) [15 gp]", damage: "1d6", crit: "18-20/x2", cost: 15 },
+            { id: "wpn_trident", name: "Trident (1d8) [15 gp]", damage: "1d8", crit: "x2", cost: 15 },
+            { id: "wpn_warhammer", name: "Warhammer (1d8) [12 gp]", damage: "1d8", crit: "x3", cost: 12 },
+            { id: "wpn_falchion", name: "Falchion (2d4) [75 gp]", damage: "2d4", crit: "18-20/x2", cost: 75 },
+            { id: "wpn_glaive", name: "Glaive (1d10) [8 gp]", damage: "1d10", crit: "x3", cost: 8 },
+            { id: "wpn_greataxe", name: "Greataxe (1d12) [20 gp]", damage: "1d12", crit: "x3", cost: 20 },
+            { id: "wpn_greatclub", name: "Greatclub (1d10) [5 gp]", damage: "1d10", crit: "x2", cost: 5 },
+            { id: "wpn_flail_heavy", name: "Heavy Flail (1d10) [15 gp]", damage: "1d10", crit: "19-20/x2", cost: 15 },
+            { id: "wpn_greatsword", name: "Greatsword (2d6) [50 gp]", damage: "2d6", crit: "19-20/x2", cost: 50 },
+            { id: "wpn_guisarme", name: "Guisarme (2d4) [9 gp]", damage: "2d4", crit: "x3", cost: 9 },
+            { id: "wpn_halberd", name: "Halberd (1d10) [10 gp]", damage: "1d10", crit: "x3", cost: 10 },
+            { id: "wpn_lance", name: "Lance (1d8) [10 gp]", damage: "1d8", crit: "x3", cost: 10 },
+            { id: "ranseur", name: "Ranseur (2d4) [10 gp]", damage: "2d4", crit: "x3", cost: 10 },
+            { id: "wpn_scythe", name: "Scythe (2d4) [18 gp]", damage: "2d4", crit: "x4", cost: 18 },
+            { id: "wpn_longbow", name: "Longbow (1d8) [75 gp]", damage: "1d8", crit: "x3", cost: 75 },
+            { id: "wpn_longbow_comp", name: "Composite Longbow (1d8) [100 gp]", damage: "1d8", crit: "x3", cost: 100 },
+            { id: "wpn_shortbow", name: "Shortbow (1d6) [30 gp]", damage: "1d6", crit: "x3", cost: 30 },
+            { id: "wpn_shortbow_comp", name: "Composite Shortbow (1d6) [75 gp]", damage: "1d6", crit: "x3", cost: 75 },
+            { id: "wpn_kama", name: "Kama (1d6) [2 gp]", damage: "1d6", crit: "x2", cost: 2 },
+            { id: "wpn_nunchaku", name: "Nunchaku (1d6) [2 gp]", damage: "1d6", crit: "x2", cost: 2 },
+            { id: "wpn_sai", name: "Sai (1d4) [1 gp]", damage: "1d4", crit: "x2", cost: 1 },
+            { id: "wpn_siangham", name: "Siangham (1d6) [3 gp]", damage: "1d6", crit: "x2", cost: 3 },
+            { id: "wpn_sword_bastard", name: "Bastard Sword (1d10) [35 gp]", damage: "1d10", crit: "19-20/x2", cost: 35 },
+            { id: "wpn_waraxe_dwarf", name: "Dwarven Waraxe (1d10) [30 gp]", damage: "1d10", crit: "x3", cost: 30 },
+            { id: "wpn_whip", name: "Whip (1d3) [1 gp]", damage: "1d3", crit: "x2", cost: 1 },
+            { id: "wpn_axe_orc_double", name: "Orc Double Axe (1d8/1d8) [60 gp]", damage: "1d8/1d8", crit: "x3", cost: 60 },
+            { id: "wpn_chain_spiked", name: "Spiked Chain (2d4) [25 gp]", damage: "2d4", crit: "x2", cost: 25 },
+            { id: "wpn_flail_dire", name: "Dire Flail (1d8/1d8) [90 gp]", damage: "1d8/1d8", crit: "x2", cost: 90 },
+            { id: "wpn_hammer_gnome", name: "Gnome Hooked Hammer (1d8/1d6) [20 gp]", damage: "1d8/1d6", crit: "x3/x4", cost: 20 },
+            { id: "wpn_sword_two_blade", name: "Two-Bladed Sword (1d8/1d8) [100 gp]", damage: "1d8/1d8", crit: "19-20/x2", cost: 100 },
+            { id: "wpn_urgrosh_dwarf", name: "Dwarven Urgrosh (1d8/1d6) [50 gp]", damage: "1d8/1d6", crit: "x3", cost: 50 },
+            { id: "wpn_bolas", name: "Bolas (1d4) [5 gp]", damage: "1d4", crit: "x2", cost: 5 },
+            { id: "wpn_crossbow_hand", name: "Hand Crossbow (1d4) [100 gp]", damage: "1d4", crit: "19-20/x2", cost: 100 },
+            { id: "wpn_crossbow_repeat_heavy", name: "Heavy Repeating Crossbow (1d10) [400 gp]", damage: "1d10", crit: "19-20/x2", cost: 400 },
+            { id: "wpn_crossbow_repeat_light", name: "Light Repeating Crossbow (1d8) [250 gp]", damage: "1d8", crit: "19-20/x2", cost: 250 },
+            { id: "wpn_net", name: "Net [20 gp]", damage: "0", crit: "x2", cost: 20 },
+            { id: "wpn_shuriken", name: "Shuriken (5) (1d2) [1 gp]", damage: "1d2", crit: "x2", cost: 1 }
+        ];
+
+        // --- FULL ARMORS & SHIELDS ---
+        const armorsData = [
+            { id: "arm_none", name: "None [0 gp]", ac: 0, maxDex: 99, acp: 0, cost: 0 },
+            { id: "arm_padded", name: "Padded (+1 AC) [5 gp]", ac: 1, maxDex: 8, acp: 0, cost: 5 },
+            { id: "arm_leather", name: "Leather (+2 AC) [10 gp]", ac: 2, maxDex: 6, acp: 0, cost: 10 },
+            { id: "arm_studded_leather", name: "Studded Leather (+3 AC) [25 gp]", ac: 3, maxDex: 5, acp: -1, cost: 25 },
+            { id: "arm_chain_shirt", name: "Chain Shirt (+4 AC) [100 gp]", ac: 4, maxDex: 4, acp: -2, cost: 100 },
+            { id: "arm_hide", name: "Hide (+3 AC) [15 gp]", ac: 3, maxDex: 4, acp: -3, cost: 15 },
+            { id: "arm_scale_mail", name: "Scale Mail (+4 AC) [50 gp]", ac: 4, maxDex: 3, acp: -4, cost: 50 },
+            { id: "arm_chainmail", name: "Chainmail (+5 AC) [150 gp]", ac: 5, maxDex: 2, acp: -5, cost: 150 },
+            { id: "arm_breastplate", name: "Breastplate (+5 AC) [200 gp]", ac: 5, maxDex: 3, acp: -4, cost: 200 },
+            { id: "arm_splint_mail", name: "Splint Mail (+6 AC) [200 gp]", ac: 6, maxDex: 0, acp: -7, cost: 200 },
+            { id: "arm_banded_mail", name: "Banded Mail (+6 AC) [250 gp]", ac: 6, maxDex: 1, acp: -6, cost: 250 },
+            { id: "arm_half_plate", name: "Half-Plate (+7 AC) [600 gp]", ac: 7, maxDex: 0, acp: -7, cost: 600 },
+            { id: "arm_full_plate", name: "Full Plate (+8 AC) [1500 gp]", ac: 8, maxDex: 1, acp: -6, cost: 1500 }
+        ];
+
+        const shieldsData = [
+            { id: "shd_none", name: "None [0 gp]", ac: 0, maxDex: 99, acp: 0, cost: 0 },
+            { id: "shd_buckler", name: "Buckler (+1 AC) [15 gp]", ac: 1, maxDex: 99, acp: -1, cost: 15 },
+            { id: "shd_light_wood", name: "Light Wooden Shield (+1 AC) [3 gp]", ac: 1, maxDex: 99, acp: -1, cost: 3 },
+            { id: "shd_light_steel", name: "Light Steel Shield (+1 AC) [9 gp]", ac: 1, maxDex: 99, acp: -1, cost: 9 },
+            { id: "shd_heavy_wood", name: "Heavy Wooden Shield (+2 AC) [7 gp]", ac: 2, maxDex: 99, acp: -2, cost: 7 },
+            { id: "shd_heavy_steel", name: "Heavy Steel Shield (+2 AC) [20 gp]", ac: 2, maxDex: 99, acp: -2, cost: 20 },
+            { id: "shd_tower", name: "Tower Shield (+4 AC) [30 gp]", ac: 4, maxDex: 2, acp: -10, cost: 30 }
+        ];
+
+        // --- FULL ADVENTURING GEAR ---
+        const equipmentData = [
+            { id: "itm_backpack", name: "Backpack (empty) [2 gp]", cost: 2 },
+            { id: "itm_barrel", name: "Barrel (empty) [2 gp]", cost: 2 },
+            { id: "itm_basket", name: "Basket (empty) [4 sp]", cost: 0.4 },
+            { id: "itm_bedroll", name: "Bedroll [1 sp]", cost: 0.1 },
+            { id: "itm_bell", name: "Bell [1 gp]", cost: 1 },
+            { id: "itm_blanket_winter", name: "Blanket, winter [5 sp]", cost: 0.5 },
+            { id: "itm_block_tackle", name: "Block and tackle [5 gp]", cost: 5 },
+            { id: "itm_bottle_wine", name: "Bottle, wine glass [2 gp]", cost: 2 },
+            { id: "itm_bucket", name: "Bucket (empty) [5 sp]", cost: 0.5 },
+            { id: "itm_caltrops", name: "Caltrops [1 gp]", cost: 1 },
+            { id: "itm_candle", name: "Candle [1 cp]", cost: 0.01 },
+            { id: "itm_canvas", name: "Canvas (sq. yd.) [1 sp]", cost: 0.1 },
+            { id: "itm_case_map", name: "Case, map or scroll [1 gp]", cost: 1 },
+            { id: "itm_chain", name: "Chain (10 ft.) [30 gp]", cost: 30 },
+            { id: "itm_chalk", name: "Chalk, 1 piece [1 cp]", cost: 0.01 },
+            { id: "itm_chest", name: "Chest (empty) [2 gp]", cost: 2 },
+            { id: "itm_crowbar", name: "Crowbar [2 gp]", cost: 2 },
+            { id: "itm_firewood", name: "Firewood (per day) [1 cp]", cost: 0.01 },
+            { id: "itm_fishhook", name: "Fishhook [1 sp]", cost: 0.1 },
+            { id: "itm_fishing_net", name: "Fishing net, 25 sq. ft. [4 gp]", cost: 4 },
+            { id: "itm_flask", name: "Flask (empty) [3 cp]", cost: 0.03 },
+            { id: "itm_flint_steel", name: "Flint and steel [1 gp]", cost: 1 },
+            { id: "itm_grappling_hook", name: "Grappling hook [1 gp]", cost: 1 },
+            { id: "itm_hammer", name: "Hammer [5 sp]", cost: 0.5 },
+            { id: "itm_ink", name: "Ink (1 oz. vial) [8 gp]", cost: 8 },
+            { id: "itm_inkpen", name: "Inkpen [1 sp]", cost: 0.1 },
+            { id: "itm_jug_clay", name: "Jug, clay [3 cp]", cost: 0.03 },
+            { id: "itm_ladder", name: "Ladder, 10-foot [5 cp]", cost: 0.05 },
+            { id: "itm_lamp_common", name: "Lamp, common [1 sp]", cost: 0.1 },
+            { id: "itm_lantern_bulls", name: "Lantern, bullseye [12 gp]", cost: 12 },
+            { id: "itm_lantern_hood", name: "Lantern, hooded [7 gp]", cost: 7 },
+            { id: "itm_lock_simple", name: "Lock, Very simple [20 gp]", cost: 20 },
+            { id: "itm_lock_average", name: "Lock, Average [40 gp]", cost: 40 },
+            { id: "itm_lock_good", name: "Lock, Good [80 gp]", cost: 80 },
+            { id: "itm_lock_amazing", name: "Lock, Amazing [150 gp]", cost: 150 },
+            { id: "itm_manacles", name: "Manacles [15 gp]", cost: 15 },
+            { id: "itm_manacles_mwk", name: "Manacles, masterwork [50 gp]", cost: 50 },
+            { id: "itm_mirror", name: "Mirror, small steel [10 gp]", cost: 10 },
+            { id: "itm_mug", name: "Mug/Tankard, clay [2 cp]", cost: 0.02 },
+            { id: "itm_oil", name: "Oil (1-pint flask) [1 sp]", cost: 0.1 },
+            { id: "itm_paper", name: "Paper (sheet) [4 sp]", cost: 0.4 },
+            { id: "itm_parchment", name: "Parchment (sheet) [2 sp]", cost: 0.2 },
+            { id: "itm_pick_miner", name: "Pick, miner's [3 gp]", cost: 3 },
+            { id: "itm_pitcher_clay", name: "Pitcher, clay [2 cp]", cost: 0.02 },
+            { id: "itm_piton", name: "Piton [1 sp]", cost: 0.1 },
+            { id: "itm_pole", name: "Pole 10-foot [2 sp]", cost: 0.2 },
+            { id: "itm_pot_iron", name: "Pot, iron [5 sp]", cost: 0.5 },
+            { id: "itm_pouch_belt", name: "Pouch, belt (empty) [1 gp]", cost: 1 },
+            { id: "itm_ram_portable", name: "Ram, portable [10 gp]", cost: 10 },
+            { id: "itm_rations", name: "Rations, trail (per day) [5 sp]", cost: 0.5 },
+            { id: "itm_rope_hempen", name: "Rope, hempen (50 ft.) [1 gp]", cost: 1 },
+            { id: "itm_rope_silk", name: "Rope, silk (50 ft.) [10 gp]", cost: 10 },
+            { id: "itm_sack", name: "Sack (empty) [1 sp]", cost: 0.1 },
+            { id: "itm_sealing_wax", name: "Sealing wax [1 gp]", cost: 1 },
+            { id: "itm_sewing_needle", name: "Sewing needle [5 sp]", cost: 0.5 },
+            { id: "itm_signal_whistle", name: "Signal whistle [8 sp]", cost: 0.8 },
+            { id: "itm_signet_ring", name: "Signet ring [5 gp]", cost: 5 },
+            { id: "itm_sledge", name: "Sledge [1 gp]", cost: 1 },
+            { id: "itm_soap", name: "Soap (per lb.) [5 sp]", cost: 0.5 },
+            { id: "itm_spade", name: "Spade or shovel [2 gp]", cost: 2 },
+            { id: "itm_spyglass", name: "Spyglass [1000 gp]", cost: 1000 },
+            { id: "itm_tent", name: "Tent [10 gp]", cost: 10 },
+            { id: "itm_torch", name: "Torch [1 cp]", cost: 0.01 },
+            { id: "itm_vial", name: "Vial ink or potion [1 gp]", cost: 1 },
+            { id: "itm_waterskin", name: "Waterskin [1 gp]", cost: 1 },
+            { id: "itm_whetstone", name: "Whetstone [2 cp]", cost: 0.02 },
+            
+            // SPECIAL SUBSTANCES
+            { id: "itm_acid", name: "Acid (flask) [10 gp]", cost: 10 },
+            { id: "itm_alchemists_fire", name: "Alchemist's fire (flask) [20 gp]", cost: 20 },
+            { id: "itm_antitoxin", name: "Antitoxin (vial) [50 gp]", cost: 50 },
+            { id: "itm_everburning_torch", name: "Everburning torch [110 gp]", cost: 110 },
+            { id: "itm_holy_water", name: "Holy water (flask) [25 gp]", cost: 25 },
+            { id: "itm_smokestick", name: "Smokestick [20 gp]", cost: 20 },
+            { id: "itm_sunrod", name: "Sunrod [2 gp]", cost: 2 },
+            { id: "itm_tanglefoot_bag", name: "Tanglefoot bag [50 gp]", cost: 50 },
+            { id: "itm_thunderstone", name: "Thunderstone [30 gp]", cost: 30 },
+            { id: "itm_tindertwig", name: "Tindertwig [1 gp]", cost: 1 },
+            
+            // TOOLS AND SKILL KITS
+            { id: "itm_alchemists_lab", name: "Alchemist's lab [500 gp]", cost: 500 },
+            { id: "itm_artisans_tools", name: "Artisan's tools [5 gp]", cost: 5 },
+            { id: "itm_artisans_tools_m", name: "Artisan's tools, masterwork [55 gp]", cost: 55 },
+            { id: "itm_climbers_kit", name: "Climber's kit [80 gp]", cost: 80 },
+            { id: "itm_disguise_kit", name: "Disguise kit [50 gp]", cost: 50 },
+            { id: "itm_healers_kit", name: "Healer's kit [50 gp]", cost: 50 },
+            { id: "itm_holy_symbol_wood", name: "Holy symbol, wooden [1 gp]", cost: 1 },
+            { id: "itm_holy_symbol_slvr", name: "Holy symbol, silver [25 gp]", cost: 25 },
+            { id: "itm_hourglass", name: "Hourglass [25 gp]", cost: 25 },
+            { id: "itm_magnifying_glass", name: "Magnifying glass [100 gp]", cost: 100 },
+            { id: "itm_musical_inst", name: "Musical instrument, common [5 gp]", cost: 5 },
+            { id: "itm_musical_inst_mwk", name: "Musical instrument, masterwork [100 gp]", cost: 100 },
+            { id: "itm_scale_merchant", name: "Scale, merchant's [2 gp]", cost: 2 },
+            { id: "itm_spell_comp_pouch", name: "Spell component pouch [5 gp]", cost: 5 },
+            { id: "itm_spellbook_blank", name: "Spellbook, wizard's (blank) [15 gp]", cost: 15 },
+            { id: "itm_thieves_tools", name: "Thieves' tools [30 gp]", cost: 30 },
+            { id: "itm_thieves_tools_m", name: "Thieves' tools, masterwork [100 gp]", cost: 100 },
+            { id: "itm_tool_mwk", name: "Tool, masterwork [50 gp]", cost: 50 },
+            
+            // CLOTHING
+            { id: "itm_outfit_artisan", name: "Artisan's outfit [1 gp]", cost: 1 },
+            { id: "itm_outfit_cleric", name: "Cleric's vestments [5 gp]", cost: 5 },
+            { id: "itm_outfit_cold", name: "Cold weather outfit [8 gp]", cost: 8 },
+            { id: "itm_outfit_courtier", name: "Courtier's outfit [30 gp]", cost: 30 },
+            { id: "itm_outfit_entertainer", name: "Entertainer's outfit [3 gp]", cost: 3 },
+            { id: "itm_outfit_explorer", name: "Explorer's outfit [10 gp]", cost: 10 },
+            { id: "itm_outfit_monk", name: "Monk's outfit [5 gp]", cost: 5 },
+            { id: "itm_outfit_noble", name: "Noble's outfit [75 gp]", cost: 75 },
+            { id: "itm_outfit_peasant", name: "Peasant's outfit [1 sp]", cost: 0.1 },
+            { id: "itm_outfit_royal", name: "Royal outfit [200 gp]", cost: 200 },
+            { id: "itm_outfit_scholar", name: "Scholar's outfit [5 gp]", cost: 5 },
+            { id: "itm_outfit_traveler", name: "Traveler's outfit [1 gp]", cost: 1 }
+        ];
+
+        const abilities = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+        const pbCosts = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:6, 15:8, 16:10, 17:13, 18:16 };
+        
+        let currentState = {
+            step: 1,
+            stats: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+            finalMods: { str: -1, dex: -1, con: -1, int: -1, wis: -1, cha: -1 }
+        };
+
+        let selectedFeats = [];
+        let selectedInventory = [];
+
+        window.removeFeat = function(id) {
+            selectedFeats = selectedFeats.filter(f => f !== id);
+            updateFeatsUI();
+        };
+
+        window.removeInventoryItem = function(index) {
+            selectedInventory.splice(index, 1);
+            updateAllMath();
+        };
+
+        // --- UI INITIALIZATION ---
+        const raceSelect = document.getElementById('char-race');
+        for (const [key, val] of Object.entries(races)) { raceSelect.add(new Option(val.name, key)); }
+        
+        const classSelect = document.getElementById('char-class');
+        for (const [key, val] of Object.entries(classes)) { classSelect.add(new Option(val.name, key)); }
+
+        const wpnSelect = document.getElementById('gear-weapon');
+        weaponsData.forEach(w => wpnSelect.add(new Option(w.name, w.id)));
+        
+        const armSelect = document.getElementById('gear-armor');
+        armorsData.forEach(a => armSelect.add(new Option(a.name, a.id)));
+        
+        const shdSelect = document.getElementById('gear-shield');
+        shieldsData.forEach(s => shdSelect.add(new Option(s.name, s.id)));
+
+        const itemSelect = document.getElementById('item-selector');
+        equipmentData.forEach(i => itemSelect.add(new Option(i.name, i.id)));
+
+        const pbContainer = document.getElementById('pb-container');
+        abilities.forEach(stat => {
+            const div = document.createElement('div');
+            div.className = 'pb-row';
+            div.innerHTML = `
+                <div style="text-transform: uppercase;">${stat}</div>
+                <div>
+                    <button class="pb-btn" data-stat="${stat}" data-dir="-1">-</button>
+                    <span id="pb-val-${stat}" style="display:inline-block; width: 25px; text-align:center; font-weight:bold;">8</span>
+                    <button class="pb-btn" data-stat="${stat}" data-dir="1">+</button>
+                </div>
+                <div id="pb-race-${stat}" style="color: var(--text-muted);">+0</div>
+                <div id="pb-final-${stat}" style="color: var(--accent); font-weight: bold; font-size: 1.2rem;">8 (-1)</div>
+            `;
+            pbContainer.appendChild(div);
+        });
+
+        const skillsContainer = document.getElementById('skills-list');
+        skillsData.forEach(skill => {
+            const div = document.createElement('div');
+            div.className = 'skill-row';
+            const acpMarker = skill.acp ? '<span style="color:#ff5555; font-size:0.7rem;">*</span>' : '';
+            div.innerHTML = `
+                <div>${skill.name}${acpMarker} <span class="skill-key">(${skill.key.toUpperCase()})</span></div>
+                <input type="number" id="rank-${skill.id}" class="skill-input" value="0" min="0">
+                <div class="skill-total" id="total-${skill.id}">+0</div>
+            `;
+            skillsContainer.appendChild(div);
+        });
+
+        // --- MATH & LOGIC ---
+        function updateAllMath() {
+            const selectedRace = races[document.getElementById('char-race').value];
+            const selectedClass = classes[document.getElementById('char-class').value];
+            const level = parseInt(document.getElementById('char-level').value) || 1;
+
+            // Equipment Processing
+            const eqWeapon = weaponsData.find(w => w.id === document.getElementById('gear-weapon').value) || weaponsData[0];
+            const eqArmor = armorsData.find(a => a.id === document.getElementById('gear-armor').value) || armorsData[0];
+            const eqShield = shieldsData.find(s => s.id === document.getElementById('gear-shield').value) || shieldsData[0];
+            const totalArmorBonus = eqArmor.ac + eqShield.ac;
+            const totalACP = eqArmor.acp + eqShield.acp;
+
+            // Wealth Processing
+            let maxGold = selectedClass.maxGold;
+            let totalSpent = eqWeapon.cost + eqArmor.cost + eqShield.cost;
+            
+            const invUl = document.getElementById('inventory-list');
+            invUl.innerHTML = '';
+            selectedInventory.forEach((itemId, index) => {
+                const item = equipmentData.find(i => i.id === itemId);
+                totalSpent += item.cost;
+                const li = document.createElement('li');
+                li.style.marginBottom = '6px';
+                li.innerHTML = `${item.name} <span class="remove-btn" onclick="removeInventoryItem(${index})">[X]</span>`;
+                invUl.appendChild(li);
+            });
+
+            let remainingGold = maxGold - totalSpent;
+            const goldDisplay = document.getElementById('gold-remaining');
+            goldDisplay.textContent = remainingGold.toFixed(2);
+            goldDisplay.style.color = remainingGold < 0 ? '#ff5555' : '#44ff44';
+
+            // 1. Point Buy
+            let pointsUsed = 0;
+            abilities.forEach(stat => {
+                const base = currentState.stats[stat];
+                pointsUsed += pbCosts[base];
+                
+                const raceMod = selectedRace.mods[stat] || 0;
+                const finalScore = base + raceMod;
+                const finalMod = Math.floor((finalScore - 10) / 2);
+                currentState.finalMods[stat] = finalMod;
+                
+                document.getElementById(`pb-val-${stat}`).textContent = base;
+                document.getElementById(`pb-race-${stat}`).textContent = raceMod >= 0 ? `+${raceMod}` : raceMod;
+                document.getElementById(`pb-final-${stat}`).textContent = `${finalScore} (${finalMod >= 0 ? '+'+finalMod : finalMod})`;
+            });
+            document.getElementById('pb-remaining').textContent = 25 - pointsUsed;
+
+            // 2. Identity Text
+            let modText = [];
+            for (const [k, v] of Object.entries(selectedRace.mods)) { modText.push(`${k.toUpperCase()} ${v > 0 ? '+'+v : v}`); }
+            document.getElementById('race-mods-display').textContent = modText.length > 0 ? modText.join(', ') : 'None';
+            document.getElementById('class-info-display').innerHTML = `<strong>Hit Die:</strong> d${selectedClass.hd} <br><strong>BAB:</strong> ${selectedClass.bab} <br><strong>Base Saves:</strong> Fort (${selectedClass.fort}), Ref (${selectedClass.ref}), Will (${selectedClass.will})`;
+
+            // 3. Combat Auto-Fills & AC Rules
+            let maxDex = Math.min(eqArmor.maxDex, eqShield.maxDex);
+            let allowedDex = currentState.finalMods.dex;
+            if (allowedDex > maxDex) allowedDex = maxDex;
+
+            document.getElementById('combat-init').textContent = currentState.finalMods.dex >= 0 ? `+${currentState.finalMods.dex}` : currentState.finalMods.dex;
+            document.getElementById('combat-speed').value = selectedRace.speed;
+            
+            ['fort', 'ref', 'will'].forEach(save => {
+                const base = parseInt(document.getElementById(`save-base-${save}`).value) || 0;
+                let statKey = save === 'fort' ? 'con' : (save === 'ref' ? 'dex' : 'wis');
+                const total = base + currentState.finalMods[statKey];
+                document.getElementById(`save-total-${save}`).textContent = total >= 0 ? `+${total}` : total;
+            });
+
+            const touchMisc = parseInt(document.getElementById('ac-touch-misc').value) || 0;
+            const flatMisc = parseInt(document.getElementById('ac-flat-misc').value) || 0;
+            const flatDex = currentState.finalMods.dex < 0 ? currentState.finalMods.dex : 0; 
+
+            document.getElementById('ac-armor-bonus').textContent = `+${totalArmorBonus}`;
+            document.getElementById('ac-normal').textContent = 10 + totalArmorBonus + allowedDex;
+            document.getElementById('ac-touch').textContent = 10 + touchMisc + allowedDex;
+            document.getElementById('ac-flat').textContent = 10 + totalArmorBonus + flatMisc + flatDex;
+
+            // 4. Skills (with ACP)
+            document.getElementById('acp-display').textContent = totalACP;
+
+            let pointsPerLevel = selectedClass.skills + currentState.finalMods.int;
+            if (pointsPerLevel < 1) pointsPerLevel = 1;
+            
+            let availablePoints = pointsPerLevel * (level + 3);
+            if (document.getElementById('char-race').value === 'race_human') availablePoints += (level + 3); 
+            
+            let usedPoints = 0;
+            skillsData.forEach(skill => {
+                const ranks = parseInt(document.getElementById(`rank-${skill.id}`).value) || 0;
+                usedPoints += ranks;
+                let total = ranks + (skill.key !== 'none' ? currentState.finalMods[skill.key] : 0);
+                if (skill.acp) total += totalACP; 
+                document.getElementById(`total-${skill.id}`).textContent = total >= 0 ? `+${total}` : total;
+            });
+            
+            document.getElementById('skill-points-display').textContent = Math.max(0, availablePoints - usedPoints);
+            document.getElementById('max-ranks-display').textContent = level + 3;
+
+            // 5. Feats Count
+            let totalFeats = 1 + Math.floor(level / 3); 
+            if (document.getElementById('char-race').value === 'race_human') totalFeats += 1; 
+            const featDisplay = document.getElementById('feats-count-display');
+            if (featDisplay) featDisplay.textContent = totalFeats;
+
+            updateFeatsUI();
+        }
+
+        // --- DYNAMIC FEATS UI ---
+        function updateFeatsUI() {
+            const select = document.getElementById('feat-selector');
+            const currentSelection = select.value;
+            select.innerHTML = '<option value="">-- Select a Feat --</option>';
+            
+            const selectedRace = races[document.getElementById('char-race').value];
+            const currentStr = currentState.stats.str + (selectedRace.mods.str || 0);
+            const currentDex = currentState.stats.dex + (selectedRace.mods.dex || 0);
+            const currentCon = currentState.stats.con + (selectedRace.mods.con || 0);
+            const currentInt = currentState.stats.int + (selectedRace.mods.int || 0);
+            const currentWis = currentState.stats.wis + (selectedRace.mods.wis || 0);
+            const currentCha = currentState.stats.cha + (selectedRace.mods.cha || 0);
+            const bab = parseInt(document.getElementById('combat-bab').value) || 0;
+            const level = parseInt(document.getElementById('char-level').value) || 1;
+
+            featsData.forEach(feat => {
+                let disabled = false;
+                const prereq = feat.prereq.toLowerCase();
+
+                // Dynamic Ability Prerequisite Checks
+                if (prereq.includes('str 13') && currentStr < 13) disabled = true;
+                if (prereq.includes('str 25') && currentStr < 25) disabled = true;
+                if (prereq.includes('dex 13') && currentDex < 13) disabled = true;
+                if (prereq.includes('dex 15') && currentDex < 15) disabled = true;
+                if (prereq.includes('dex 17') && currentDex < 17) disabled = true;
+                if (prereq.includes('dex 19') && currentDex < 19) disabled = true;
+                if (prereq.includes('con 13') && currentCon < 13) disabled = true;
+                if (prereq.includes('con 15') && currentCon < 15) disabled = true;
+                if (prereq.includes('int 13') && currentInt < 13) disabled = true;
+                if (prereq.includes('wis 13') && currentWis < 13) disabled = true;
+                if (prereq.includes('cha 15') && currentCha < 15) disabled = true;
+
+                // Dynamic BAB Prerequisite Checks
+                if (prereq.includes('base attack bonus +1') && bab < 1) disabled = true;
+                if (prereq.includes('base attack bonus +3') && bab < 3) disabled = true;
+                if (prereq.includes('base attack bonus +4') && bab < 4) disabled = true;
+                if (prereq.includes('base attack bonus +5') && bab < 5) disabled = true;
+                if (prereq.includes('base attack bonus +6') && bab < 6) disabled = true;
+                if (prereq.includes('base attack bonus +8') && bab < 8) disabled = true;
+                if (prereq.includes('base attack bonus +11') && bab < 11) disabled = true;
+                if (prereq.includes('character level 6th') && level < 6) disabled = true;
+
+                // Dynamic Feat Chain Checks
+                if (prereq.includes('power attack') && !selectedFeats.includes('feat_power_attack')) disabled = true;
+                if (prereq.includes('cleave') && !selectedFeats.includes('feat_cleave')) disabled = true;
+                if (prereq.includes('dodge') && !selectedFeats.includes('feat_dodge')) disabled = true;
+                if (prereq.includes('mobility') && !selectedFeats.includes('feat_mobility')) disabled = true;
+                if (prereq.includes('point blank shot') && !selectedFeats.includes('feat_point_blank_shot')) disabled = true;
+                if (prereq.includes('rapid shot') && !selectedFeats.includes('feat_rapid_shot')) disabled = true;
+                if (prereq.includes('two-weapon fighting') && !selectedFeats.includes('feat_two_weapon_fighting')) disabled = true;
+                if (prereq.includes('improved unarmed strike') && !selectedFeats.includes('feat_improved_unarmed_strike')) disabled = true;
+
+                if (selectedFeats.includes(feat.id)) disabled = true;
+
+                const opt = document.createElement('option');
+                opt.value = feat.id;
+                opt.textContent = `${feat.name} (Prereq: ${feat.prereq})`;
+                if (disabled) opt.disabled = true;
+                select.appendChild(opt);
+            });
+
+            if (currentSelection && !select.querySelector(`option[value="${currentSelection}"]`).disabled) {
+                select.value = currentSelection;
+            }
+
+            const ul = document.getElementById('selected-feats-list');
+            ul.innerHTML = '';
+            selectedFeats.forEach(featId => {
+                const f = featsData.find(x => x.id === featId);
+                const li = document.createElement('li');
+                li.style.marginBottom = '6px';
+                li.innerHTML = `${f.name} <span class="remove-btn" onclick="removeFeat('${f.id}')">[X]</span>`;
+                ul.appendChild(li);
+            });
+        }
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('btn-add-feat').addEventListener('click', () => {
+            const select = document.getElementById('feat-selector');
+            if (select.value && !selectedFeats.includes(select.value)) {
+                selectedFeats.push(select.value);
+                updateFeatsUI();
+            }
+        });
+
+        document.getElementById('btn-add-item').addEventListener('click', () => {
+            const select = document.getElementById('item-selector');
+            if (select.value) {
+                selectedInventory.push(select.value);
+                updateAllMath();
+            }
+        });
+
+        document.querySelectorAll('.pb-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const stat = e.target.dataset.stat;
+                const dir = parseInt(e.target.dataset.dir);
+                const current = currentState.stats[stat];
+                const next = current + dir;
+                
+                if (next >= 8 && next <= 18) {
+                    if (dir === 1) {
+                        const costDiff = pbCosts[next] - pbCosts[current];
+                        const pointsUsed = abilities.reduce((sum, s) => sum + pbCosts[currentState.stats[s]], 0);
+                        if (25 - pointsUsed >= costDiff) currentState.stats[stat] = next;
+                    } else {
+                        currentState.stats[stat] = next;
+                    }
+                    updateAllMath();
+                }
+            });
+        });
+
+        // Trigger updates on any change
+        const triggerElements = ['char-race', 'char-class', 'char-level', 'combat-bab', 'gear-armor', 'gear-shield', 'ac-touch-misc', 'ac-flat-misc', 'gear-weapon'];
+        triggerElements.forEach(id => {
+            document.getElementById(id).addEventListener('change', updateAllMath);
+            document.getElementById(id).addEventListener('input', updateAllMath);
+        });
+
+        document.querySelectorAll('.skill-input').forEach(el => el.addEventListener('input', updateAllMath));
+        ['fort', 'ref', 'will'].forEach(save => { document.getElementById(`save-base-${save}`).addEventListener('input', updateAllMath); });
+
+        // --- NAVIGATION LOGIC ---
+        function changeStep(dir) {
+            document.getElementById(`step-${currentState.step}`).classList.remove('active');
+            currentState.step += dir;
+            document.getElementById(`step-${currentState.step}`).classList.add('active');
+            
+            document.getElementById('btn-prev').style.visibility = currentState.step === 1 ? 'hidden' : 'visible';
+            document.getElementById('btn-next').style.display = currentState.step === 7 ? 'none' : 'block';
+            
+            if (currentState.step === 4) {
+                if (document.getElementById('combat-hp').value === "10") {
+                    document.getElementById('combat-hp').value = classes[document.getElementById('char-class').value].hd + currentState.finalMods.con;
+                }
+            }
+            updateAllMath();
+        }
+
+        document.getElementById('btn-next').addEventListener('click', () => changeStep(1));
+        document.getElementById('btn-prev').addEventListener('click', () => changeStep(-1));
+
+        // Initialize
+        updateAllMath();
+
+        // --- SAVE TO FIREBASE ---
+        document.getElementById('btn-save').addEventListener('click', async () => {
+            const charName = document.getElementById('char-name').value || 'Unnamed';
+            const saveName = prompt("Enter a save file name for Firebase:", charName.replace(/\s+/g, '_'));
+            if (!saveName) return; 
+
+            const savedSkills = {};
+            skillsData.forEach(s => {
+                const r = parseInt(document.getElementById(`rank-${s.id}`).value) || 0;
+                if (r > 0) savedSkills[`skill_${s.id}`] = r;
+            });
+            
+            const selectedRace = races[document.getElementById('char-race').value];
+
+            const entityData = {
+                id: saveName,
+                type: "Player",
+                owner_id: "brandon",
+                name: charName,
+                race: document.getElementById('char-race').value,
+                class: document.getElementById('char-class').value,
+                level: parseInt(document.getElementById('char-level').value) || 1,
+                alignment: document.getElementById('char-align').value, 
+                ability_scores: {
+                    STR: currentState.stats.str + (selectedRace.mods.str || 0),
+                    DEX: currentState.stats.dex + (selectedRace.mods.dex || 0),
+                    CON: currentState.stats.con + (selectedRace.mods.con || 0),
+                    INT: currentState.stats.int + (selectedRace.mods.int || 0),
+                    WIS: currentState.stats.wis + (selectedRace.mods.wis || 0),
+                    CHA: currentState.stats.cha + (selectedRace.mods.cha || 0),
+                },
+                max_hp: parseInt(document.getElementById('combat-hp').value) || 10,
+                current_hp: parseInt(document.getElementById('combat-hp').value) || 10,
+                base_attack: parseInt(document.getElementById('combat-bab').value) || 0,
+                speed: parseInt(document.getElementById('combat-speed').value) || 30,
+                ac_normal: parseInt(document.getElementById('ac-normal').textContent) || 10,
+                ac_touch: parseInt(document.getElementById('ac-touch').textContent) || 10,
+                ac_flat: parseInt(document.getElementById('ac-flat').textContent) || 10, 
+                save_fort: parseInt(document.getElementById('save-base-fort').value) + currentState.finalMods.con,
+                save_ref: parseInt(document.getElementById('save-base-ref').value) + currentState.finalMods.dex,
+                save_will: parseInt(document.getElementById('save-base-will').value) + currentState.finalMods.wis,
+                skill_ranks: savedSkills,
+                feats: selectedFeats,
+                equipped_weapon: document.getElementById('gear-weapon').value,
+                equipped_armor: document.getElementById('gear-armor').value,
+                equipped_shield: document.getElementById('gear-shield').value,
+                inventory: selectedInventory,
+                remaining_gold: document.getElementById('gold-remaining').textContent
+            };
+
+            try {
+                const characterRef = ref(db, 'characters/' + saveName);
+                await set(characterRef, entityData);
+                alert(`Success! ${saveName} has been saved to Firebase.`);
+            } catch (error) {
+                console.error("Firebase Error: ", error);
+                alert("Failed to save character. Check the browser console.");
+            }
+        });
+    </script>
+</body>
+</html>
