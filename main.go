@@ -27,6 +27,7 @@ type Game struct {
 	SkillRanksAllocated map[string]int
 	PlayerX             int
 	PlayerY             int
+	PlayerFacing        int // 0=North, 1=East, 2=South, 3=West
 }
 
 func (g *Game) BroadcastNoise(x, y int, volume float64) {}
@@ -38,16 +39,16 @@ type RadialAction struct {
 
 var activeGame *Game
 
-// MapPayload standardizes the JSON export so Javascript can easily read the log
 type MapPayload struct {
-	Width   int
-	Height  int
-	Grid    [60][120]rune
-	Rooms   []Room
-	Doors   map[string]*Door
-	PlayerX int
-	PlayerY int
-	Log     []string
+	Width        int
+	Height       int
+	Grid         [60][120]rune
+	Rooms        []Room
+	Doors        map[string]*Door
+	PlayerX      int
+	PlayerY      int
+	PlayerFacing int
+	Log          []string
 }
 
 func main() {
@@ -56,6 +57,7 @@ func main() {
 
 	js.Global().Set("generateDungeon", js.FuncOf(generateDungeonWASM))
 	js.Global().Set("interactWithTile", js.FuncOf(interactWithTileWASM))
+	js.Global().Set("handleKeyboard", js.FuncOf(handleKeyboardWASM)) // New Listener
 
 	<-make(chan bool)
 }
@@ -82,7 +84,7 @@ func generateDungeonWASM(this js.Value, args []js.Value) interface{} {
 	for _, r := range gameMap.Rooms {
 		if r.IsFocal {
 			cx, cy := r.Center()
-			spawnX = cx * 2 // Convert 10ft macro to 5ft micro
+			spawnX = cx * 2
 			spawnY = cy * 2
 			break
 		}
@@ -96,6 +98,7 @@ func generateDungeonWASM(this js.Value, args []js.Value) interface{} {
 		SkillRanksAllocated: map[string]int{"skill_search": 4, "skill_open_lock": 4, "skill_disable_device": 4},
 		PlayerX:             spawnX,
 		PlayerY:             spawnY,
+		PlayerFacing:        0, // Start facing North
 	}
 
 	return generateMapStateWASM()
@@ -112,7 +115,6 @@ func interactWithTileWASM(this js.Value, args []js.Value) interface{} {
 	vttX := args[3].Int()
 	vttY := args[4].Int()
 
-	// Reset log for this specific interaction
 	activeGame.ActionLog = []string{}
 
 	doorKey := Node{goX, goY}
@@ -137,15 +139,81 @@ func interactWithTileWASM(this js.Value, args []js.Value) interface{} {
 	return generateMapStateWASM()
 }
 
+func handleKeyboardWASM(this js.Value, args []js.Value) interface{} {
+	if len(args) < 1 || activeGame == nil {
+		return `{"error": "Engine not ready"}`
+	}
+	key := args[0].String()
+
+	activeGame.ActionLog = []string{}
+	newX := activeGame.PlayerX
+	newY := activeGame.PlayerY
+
+	// 4-Way Direction Vectors: N (0), E (1), S (2), W (3)
+	dx := []int{0, 1, 0, -1}
+	dy := []int{-1, 0, 1, 0}
+
+	switch key {
+	case "a": // Rotate Left (Counter-Clockwise)
+		activeGame.PlayerFacing = (activeGame.PlayerFacing + 3) % 4
+		return generateMapStateWASM()
+	case "d": // Rotate Right (Clockwise)
+		activeGame.PlayerFacing = (activeGame.PlayerFacing + 1) % 4
+		return generateMapStateWASM()
+	case "w": // Forward
+		newX += dx[activeGame.PlayerFacing]
+		newY += dy[activeGame.PlayerFacing]
+	case "s": // Back
+		backDir := (activeGame.PlayerFacing + 2) % 4
+		newX += dx[backDir]
+		newY += dy[backDir]
+	case "q": // Strafe Left
+		leftDir := (activeGame.PlayerFacing + 3) % 4
+		newX += dx[leftDir]
+		newY += dy[leftDir]
+	case "e": // Strafe Right
+		rightDir := (activeGame.PlayerFacing + 1) % 4
+		newX += dx[rightDir]
+		newY += dy[rightDir]
+	}
+
+	// Collision Detection mapping micro to macro grid
+	goX := newX / 2
+	goY := newY / 2
+
+	if goY >= 0 && goY < 60 && goX >= 0 && goX < 120 {
+		tile := activeGame.DungeonMap.Grid[goY][goX]
+		doorKey := Node{goX, goY}
+		door, hasDoor := activeGame.DungeonMap.Doors[doorKey]
+
+		canMove := true
+		if tile == 35 { // Wall
+			canMove = false
+		} else if hasDoor && !door.IsOpen { // Closed Door
+			canMove = false
+		}
+
+		if canMove {
+			activeGame.PlayerX = newX
+			activeGame.PlayerY = newY
+		} else {
+			activeGame.ActionLog = append(activeGame.ActionLog, "*Thud* The way is blocked.")
+		}
+	}
+
+	return generateMapStateWASM()
+}
+
 func generateMapStateWASM() string {
 	payload := MapPayload{
-		Width:   120,
-		Height:  60,
-		Rooms:   activeGame.DungeonMap.Rooms,
-		Doors:   make(map[string]*Door),
-		PlayerX: activeGame.PlayerX,
-		PlayerY: activeGame.PlayerY,
-		Log:     activeGame.ActionLog,
+		Width:        120,
+		Height:       60,
+		Rooms:        activeGame.DungeonMap.Rooms,
+		Doors:        make(map[string]*Door),
+		PlayerX:      activeGame.PlayerX,
+		PlayerY:      activeGame.PlayerY,
+		PlayerFacing: activeGame.PlayerFacing,
+		Log:          activeGame.ActionLog,
 	}
 
 	for y := 0; y < 60; y++ {

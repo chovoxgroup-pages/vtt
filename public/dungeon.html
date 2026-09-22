@@ -228,15 +228,33 @@
                 ctx.fillRect(drawX, drawY, GO_TILE, GO_TILE);
             }
 
-            // Draw Player Token
+            // Draw Player Token & Facing Indicator
             const px = dungeonData.PlayerX * VTT_TILE;
             const py = dungeonData.PlayerY * VTT_TILE;
+            
             ctx.fillStyle = '#4488ff';
             ctx.beginPath();
             ctx.arc(px + VTT_TILE/2, py + VTT_TILE/2, VTT_TILE/2 - 2, 0, Math.PI * 2);
             ctx.fill();
             ctx.lineWidth = 2 / zoom;
             ctx.strokeStyle = '#fff';
+            ctx.stroke();
+
+            // Draw red facing line
+            ctx.beginPath();
+            ctx.moveTo(px + VTT_TILE/2, py + VTT_TILE/2);
+            let fx = px + VTT_TILE/2;
+            let fy = py + VTT_TILE/2;
+            const faceLen = VTT_TILE/2;
+            
+            if (dungeonData.PlayerFacing === 0) fy -= faceLen; // North
+            else if (dungeonData.PlayerFacing === 1) fx += faceLen; // East
+            else if (dungeonData.PlayerFacing === 2) fy += faceLen; // South
+            else if (dungeonData.PlayerFacing === 3) fx -= faceLen; // West
+            
+            ctx.lineTo(fx, fy);
+            ctx.lineWidth = 3 / zoom;
+            ctx.strokeStyle = '#ff4444';
             ctx.stroke();
 
             ctx.restore();
@@ -402,6 +420,27 @@
         document.addEventListener('click', (e) => {
             if (e.target !== canvas && !radialMenu.contains(e.target)) {
                 radialMenu.style.display = 'none';
+            }
+        });
+        // --- KEYBOARD CONTROLS ---
+
+        window.addEventListener('keydown', (e) => {
+            const validKeys = ['w', 'a', 's', 'd', 'q', 'e'];
+            const key = e.key.toLowerCase();
+            
+            if (validKeys.includes(key)) {
+                if (key === 'w' || key === 's') e.preventDefault(); // Prevent page scrolling
+                
+                if (!dungeonData) return;
+                
+                const jsonString = window.handleKeyboard(key);
+                dungeonData = JSON.parse(jsonString);
+                
+                if (dungeonData.Log && dungeonData.Log.length > 0) {
+                    dungeonData.Log.forEach(msg => logEvent(msg, "result"));
+                }
+                
+                renderMap();
             }
         });
     </script>
