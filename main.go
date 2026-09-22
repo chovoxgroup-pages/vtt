@@ -2,11 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
-	"strings"
+	"syscall/js"
 	"time"
 )
 
@@ -20,121 +18,146 @@ type Config struct {
 	APL      int
 }
 
+type Game struct {
+	DungeonMap          *Map
+	ActionLog           []string
+	StandardRaces       []string
+	SelectedRaceIndex   int
+	PointBuyStats       map[string]int
+	SkillRanksAllocated map[string]int
+	PlayerX             int
+	PlayerY             int
+}
+
+func (g *Game) BroadcastNoise(x, y int, volume float64) {}
+
+type RadialAction struct {
+	Name    string
+	Execute func()
+}
+
+var activeGame *Game
+
+// MapPayload standardizes the JSON export so Javascript can easily read the log
+type MapPayload struct {
+	Width   int
+	Height  int
+	Grid    [60][120]rune
+	Rooms   []Room
+	Doors   map[string]*Door
+	PlayerX int
+	PlayerY int
+	Log     []string
+}
+
 func main() {
-	sizeFlag := flag.String("size", "random", "Dungeon size: few, normal, many, random")
-	funcFlag := flag.String("function", "random", "Dungeon function: fortification, worship, restraint, storage, shelter, concealment, random")
-	trapFlag := flag.String("traps", "some", "Traps frequency: none, some, many")
-	doorFlag := flag.String("doors", "some", "Doors frequency: none, some, many")
-	lockFlag := flag.String("locked", "some", "Locked doors frequency: none, some, many")
-	secretFlag := flag.Bool("secret", true, "Include secret doors: true, false")
-	aplFlag := flag.Int("apl", 1, "Average Party Level: 1-20")
+	fmt.Println("System: Go WebAssembly Engine Initialized.")
+	rand.Seed(time.Now().UnixNano())
 
-	flag.Parse()
+	js.Global().Set("generateDungeon", js.FuncOf(generateDungeonWASM))
+	js.Global().Set("interactWithTile", js.FuncOf(interactWithTileWASM))
 
+	<-make(chan bool)
+}
+
+func generateDungeonWASM(this js.Value, args []js.Value) interface{} {
 	cfg := Config{
-		Size:     *sizeFlag,
-		Function: *funcFlag,
-		Traps:    *trapFlag,
-		Doors:    *doorFlag,
-		Locked:   *lockFlag,
-		Secret:   *secretFlag,
-		APL:      *aplFlag,
+		Size:     "normal",
+		Function: "random",
+		Traps:    "some",
+		Doors:    "some",
+		Locked:   "some",
+		Secret:   true,
+		APL:      1,
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	gameMap := NewMap(cfg)
 	gameMap.GenerateRooms()
 	gameMap.PlaceDoors()
 	gameMap.PlaceRoomTraps()
 	gameMap.PlaceMonsters()
 	gameMap.PlaceTreasure()
-	gameMap.Print()
 
-	fmt.Println("\n--- Room Semantic Data ---")
+	var spawnX, spawnY int
 	for _, r := range gameMap.Rooms {
-		focalStr := ""
 		if r.IsFocal {
-			focalStr = " [FOCAL HUB]"
-		}
-
-		trapStr := ""
-		if len(r.Traps) > 0 {
-			trapStr = fmt.Sprintf(" | TRAP: %s (Type: %s, CR: %d)", r.Traps[0].Name, r.Traps[0].Category, r.Traps[0].CR)
-		}
-
-		monsterStr := ""
-		if len(r.Monsters) > 0 {
-			monsterStr = fmt.Sprintf(" | MONSTERS: %d %s (Type: %s, CR: %d)", r.Monsters[0].Count, r.Monsters[0].Name, r.Monsters[0].Type, r.Monsters[0].CR)
-		}
-
-		treasureStr := ""
-		if r.Treasure.Coins != "" && r.Treasure.Coins != "None" {
-			g := "None"
-			i := "None"
-			if len(r.Treasure.Goods) > 0 {
-				g = strings.Join(r.Treasure.Goods, ", ")
-			}
-			if len(r.Treasure.Items) > 0 {
-				i = strings.Join(r.Treasure.Items, ", ")
-			}
-			treasureStr = fmt.Sprintf(" | LOOT: [%s] Goods: %s | Items: %s", r.Treasure.Coins, g, i)
-		}
-
-		fmt.Printf("Room ID %d: %s%s at (%d, %d)%s%s%s\n", r.ID, r.RType, focalStr, r.X, r.Y, trapStr, monsterStr, treasureStr)
-	}
-
-	fmt.Println("\n--- Sample Door Generation Data ---")
-	count := 0
-	for pos, door := range gameMap.Doors {
-		if count >= 5 {
+			cx, cy := r.Center()
+			spawnX = cx * 2 // Convert 10ft macro to 5ft micro
+			spawnY = cy * 2
 			break
 		}
+	}
 
-		trapStr := "IsTrapped:false"
-		if door.IsTrapped && door.Trap != nil {
-			trapStr = fmt.Sprintf("IsTrapped:true | TRAP: %s (Type: %s, CR: %d)", door.Trap.Name, door.Trap.Category, door.Trap.CR)
+	activeGame = &Game{
+		DungeonMap:          gameMap,
+		ActionLog:           []string{"You materialize in the dungeon."},
+		StandardRaces:       []string{"race_human"},
+		PointBuyStats:       map[string]int{"STR": 14, "DEX": 15, "CON": 13, "INT": 12, "WIS": 10, "CHA": 8},
+		SkillRanksAllocated: map[string]int{"skill_search": 4, "skill_open_lock": 4, "skill_disable_device": 4},
+		PlayerX:             spawnX,
+		PlayerY:             spawnY,
+	}
+
+	return generateMapStateWASM()
+}
+
+func interactWithTileWASM(this js.Value, args []js.Value) interface{} {
+	if len(args) < 5 || activeGame == nil {
+		return `{"error": "Engine not ready"}`
+	}
+
+	goX := args[0].Int()
+	goY := args[1].Int()
+	actionName := args[2].String()
+	vttX := args[3].Int()
+	vttY := args[4].Int()
+
+	// Reset log for this specific interaction
+	activeGame.ActionLog = []string{}
+
+	doorKey := Node{goX, goY}
+	if door, exists := activeGame.DungeonMap.Doors[doorKey]; exists {
+		actions := door.GetAvailableActions(activeGame, goX, goY)
+		for _, a := range actions {
+			if a.Name == actionName {
+				a.Execute()
+				break
+			}
 		}
-
-		fmt.Printf("Door at (%d, %d): &{IsOpen:%v Stuck:%v Lock:%v %s Secret:%v}\n",
-			pos.X, pos.Y, door.IsOpen, door.Stuck, door.Lock, trapStr, door.Secret)
-		count++
+	} else {
+		if actionName == "Move Here" {
+			activeGame.PlayerX = vttX
+			activeGame.PlayerY = vttY
+			activeGame.ActionLog = append(activeGame.ActionLog, fmt.Sprintf("You move to [%d, %d].", vttX, vttY))
+		} else if actionName == "Search Tile" || actionName == "Search Wall" {
+			activeGame.ActionLog = append(activeGame.ActionLog, fmt.Sprintf("You thoroughly search the area at [%d, %d].", vttX, vttY))
+		}
 	}
 
-	// Serialize the map for the 2D HTML Tabletop
-	// Note: We create an exportable payload since maps with struct keys (Node) cannot be marshaled directly to JSON
-	exportPayload := struct {
-		Width  int
-		Height int
-		Grid   [60][120]rune // Using standard dimensions
-		Rooms  []Room
-		Doors  map[string]*Door
-	}{
-		Width:  120, // From map.go
-		Height: 60,  // From map.go
-		Rooms:  gameMap.Rooms,
-		Doors:  make(map[string]*Door),
+	return generateMapStateWASM()
+}
+
+func generateMapStateWASM() string {
+	payload := MapPayload{
+		Width:   120,
+		Height:  60,
+		Rooms:   activeGame.DungeonMap.Rooms,
+		Doors:   make(map[string]*Door),
+		PlayerX: activeGame.PlayerX,
+		PlayerY: activeGame.PlayerY,
+		Log:     activeGame.ActionLog,
 	}
 
-	// Convert [Height][Width]CellType to [Height][Width]rune
 	for y := 0; y < 60; y++ {
 		for x := 0; x < 120; x++ {
-			exportPayload.Grid[y][x] = rune(gameMap.Grid[y][x])
+			payload.Grid[y][x] = rune(activeGame.DungeonMap.Grid[y][x])
 		}
 	}
-
-	// Convert map[Node]*Door to map[string]*Door for JSON
-	for node, door := range gameMap.Doors {
+	for node, door := range activeGame.DungeonMap.Doors {
 		key := fmt.Sprintf("%d,%d", node.X, node.Y)
-		exportPayload.Doors[key] = door
+		payload.Doors[key] = door
 	}
 
-	mapData, err := json.MarshalIndent(exportPayload, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	err = os.WriteFile("dungeon_state.json", mapData, 0644)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("\nDungeon state exported to dungeon_state.json")
+	mapData, _ := json.Marshal(payload)
+	return string(mapData)
 }

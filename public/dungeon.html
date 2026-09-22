@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>2D VTT Simulation</title>
+    <script src="wasm_exec.js"></script>
     <style>
         body {
             background-color: #1a1a24;
@@ -19,10 +20,10 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: auto;
+            overflow: hidden;
             border: 2px solid #d4af37;
             background: #000;
-            position: relative; /* For absolutely positioning the radial menu */
+            position: relative;
         }
         canvas {
             image-rendering: pixelated;
@@ -49,8 +50,8 @@
         .log-sys { color: #888; }
         .log-action { color: #d4af37; }
         .log-observe { color: #88ccff; }
+        .log-result { color: #44ff44; }
         
-        /* Radial Menu Styles */
         #radial-menu {
             display: none;
             position: absolute;
@@ -75,6 +76,24 @@
         }
         .radial-btn:last-child { border-bottom: none; }
         .radial-btn:hover { background: #d4af37; color: #000; font-weight: bold; }
+
+        #recenter-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(30, 30, 40, 0.7);
+            color: #d4af37;
+            border: 1px solid #d4af37;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            z-index: 5;
+            transition: background 0.2s;
+        }
+        #recenter-btn:hover {
+            background: rgba(212, 175, 55, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -82,12 +101,13 @@
     <div id="vtt-container">
         <canvas id="dungeonCanvas"></canvas>
         <div id="radial-menu"></div>
+        <button id="recenter-btn" title="Center Camera on Player">⌖ Recenter</button>
     </div>
 
     <div id="sidebar">
         <h2 style="color: #d4af37; margin-top: 0;">Event Log</h2>
         <div id="combat-log">
-            <div class="log-entry log-sys">System: Awaiting dungeon_state.json...</div>
+            <div class="log-entry log-sys">System: Booting Go Engine...</div>
         </div>
     </div>
 
@@ -96,9 +116,21 @@
         const ctx = canvas.getContext('2d');
         const log = document.getElementById('combat-log');
         const radialMenu = document.getElementById('radial-menu');
+        const recenterBtn = document.getElementById('recenter-btn');
         
-        const TILE_SIZE = 24; // 24px per 5ft square
+        const VTT_TILE = 16;       
+        const GO_TILE = VTT_TILE * 2; 
         let dungeonData = null;
+
+        let cameraX = 0;
+        let cameraY = 0;
+        let zoom = 1.0;
+        let isDragging = false;
+        let hasDragged = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let camStartPosX = 0;
+        let camStartPosY = 0;
 
         function logEvent(text, type = 'action') {
             const entry = document.createElement('div');
@@ -108,148 +140,270 @@
             log.scrollTop = log.scrollHeight;
         }
 
-        async function loadDungeon() {
-            try {
-                const response = await fetch('dungeon_state.json');
-                dungeonData = await response.json();
-                
-                canvas.width = dungeonData.Width * TILE_SIZE;
-                canvas.height = dungeonData.Height * TILE_SIZE;
-                
-                logEvent("System: Dungeon loaded successfully.", "sys");
-                renderMap();
-            } catch (err) {
-                logEvent("System Error: Could not load dungeon_state.json. Did you run the Go generator?", "sys");
-                console.error(err);
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+            go.run(result.instance);
+            
+            const jsonString = window.generateDungeon();
+            dungeonData = JSON.parse(jsonString);
+            
+            centerCameraOnPlayer();
+            
+            logEvent("System: Dungeon generated. Player spawned in focal room.", "sys");
+            if (dungeonData.Log) {
+                dungeonData.Log.forEach(msg => logEvent(msg, "result"));
             }
+            renderMap();
+        }).catch(err => {
+            logEvent("System Error: Could not boot main.wasm.", "sys");
+            console.error(err);
+        });
+
+        window.addEventListener('resize', () => {
+            centerCameraOnPlayer();
+            renderMap();
+        });
+
+        function centerCameraOnPlayer() {
+            if (!dungeonData) return;
+            const container = document.getElementById('vtt-container');
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            const playerPixelX = (dungeonData.PlayerX * VTT_TILE) + (VTT_TILE / 2);
+            const playerPixelY = (dungeonData.PlayerY * VTT_TILE) + (VTT_TILE / 2);
+            cameraX = (canvas.width / 2) - (playerPixelX * zoom);
+            cameraY = (canvas.height / 2) - (playerPixelY * zoom);
         }
+
+        recenterBtn.addEventListener('click', () => {
+            centerCameraOnPlayer();
+            renderMap();
+        });
 
         function renderMap() {
             if (!dungeonData) return;
 
-            ctx.fillStyle = '#111';
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(cameraX, cameraY);
+            ctx.scale(zoom, zoom);
 
             for (let y = 0; y < dungeonData.Height; y++) {
                 for (let x = 0; x < dungeonData.Width; x++) {
                     const tile = dungeonData.Grid[y][x]; 
+                    const drawX = x * GO_TILE;
+                    const drawY = y * GO_TILE;
                     
-                    if (tile === 35) { // '#' (Wall)
+                    if (tile === 35) { // Wall
                         ctx.fillStyle = '#333';
-                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                    } else if (tile === 46 || tile === 43 || tile === 79) { // '.', '+', 'O' (Floor base)
+                        ctx.fillRect(drawX, drawY, GO_TILE, GO_TILE);
+                    } else if (tile === 46 || tile === 43 || tile === 79) { // Floor
                         ctx.fillStyle = '#555';
-                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        ctx.fillRect(drawX, drawY, GO_TILE, GO_TILE);
+                        
                         ctx.strokeStyle = '#444';
-                        ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        ctx.lineWidth = 1 / zoom; 
+                        ctx.strokeRect(drawX, drawY, VTT_TILE, VTT_TILE);
+                        ctx.strokeRect(drawX + VTT_TILE, drawY, VTT_TILE, VTT_TILE);
+                        ctx.strokeRect(drawX, drawY + VTT_TILE, VTT_TILE, VTT_TILE);
+                        ctx.strokeRect(drawX + VTT_TILE, drawY + VTT_TILE, VTT_TILE, VTT_TILE);
                     }
                 }
             }
 
-            // Draw Doors over floors
             for (const key in dungeonData.Doors) {
                 const [strX, strY] = key.split(',');
                 const x = parseInt(strX);
                 const y = parseInt(strY);
                 const door = dungeonData.Doors[key];
+                
+                const drawX = x * GO_TILE;
+                const drawY = y * GO_TILE;
 
-                if (!door.IsOpen) {
-                    ctx.fillStyle = '#8B4513'; // SaddleBrown for closed doors
-                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                } else {
-                    ctx.fillStyle = '#4A250A'; // Dark brown for open doors
-                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                }
+                ctx.fillStyle = door.IsOpen ? '#4A250A' : '#8B4513';
+                ctx.fillRect(drawX, drawY, GO_TILE, GO_TILE);
             }
+
+            // Draw Player Token
+            const px = dungeonData.PlayerX * VTT_TILE;
+            const py = dungeonData.PlayerY * VTT_TILE;
+            ctx.fillStyle = '#4488ff';
+            ctx.beginPath();
+            ctx.arc(px + VTT_TILE/2, py + VTT_TILE/2, VTT_TILE/2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth = 2 / zoom;
+            ctx.strokeStyle = '#fff';
+            ctx.stroke();
+
+            ctx.restore();
         }
 
-        // --- INTERACTION LOGIC ---
+        // --- CAMERA CONTROLS ---
 
-        // Left Click: Observe (DM read-aloud)
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            radialMenu.style.display = 'none';
+
+            const zoomSensitivity = 0.1;
+            const delta = e.deltaY > 0 ? -zoomSensitivity : zoomSensitivity;
+            const newZoom = Math.max(0.2, Math.min(zoom + delta, 3.0));
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            cameraX = mouseX - (mouseX - cameraX) * (newZoom / zoom);
+            cameraY = mouseY - (mouseY - cameraY) * (newZoom / zoom);
+            zoom = newZoom;
+
+            renderMap();
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { 
+                isDragging = true;
+                hasDragged = false;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                camStartPosX = cameraX;
+                camStartPosY = cameraY;
+                radialMenu.style.display = 'none';
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const dx = e.clientX - dragStartX;
+                const dy = e.clientY - dragStartY;
+                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                    hasDragged = true;
+                    canvas.style.cursor = 'grabbing';
+                    cameraX = camStartPosX + dx;
+                    cameraY = camStartPosY + dy;
+                    renderMap();
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                isDragging = false;
+                canvas.style.cursor = 'crosshair';
+            }
+        });
+
+        function getWorldCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const worldX = (e.clientX - rect.left - cameraX) / zoom;
+            const worldY = (e.clientY - rect.top - cameraY) / zoom;
+            
+            const vttX = Math.floor(worldX / VTT_TILE);
+            const vttY = Math.floor(worldY / VTT_TILE);
+            
+            const goX = Math.floor(vttX / 2);
+            const goY = Math.floor(vttY / 2);
+
+            return { vttX, vttY, goX, goY };
+        }
+
+        // --- INTERACTION CONTROLS ---
+
         canvas.addEventListener('click', (e) => {
-            radialMenu.style.display = 'none'; // Hide menu on left click
+            if (e.button !== 0 || hasDragged) return; 
+            
             if (!dungeonData) return;
             
-            const rect = canvas.getBoundingClientRect();
-            const x = Math.floor((e.clientX - rect.left) / TILE_SIZE);
-            const y = Math.floor((e.clientY - rect.top) / TILE_SIZE);
+            const coords = getWorldCoordinates(e);
+            if (coords.goY < 0 || coords.goY >= dungeonData.Height || coords.goX < 0 || coords.goX >= dungeonData.Width) return;
+
+            const tile = dungeonData.Grid[coords.goY][coords.goX];
+            const doorKey = `${coords.goX},${coords.goY}`;
             
-            const tile = dungeonData.Grid[y][x];
-            const doorKey = `${x},${y}`;
-            
-            let desc = "You see a section of floor.";
-            if (tile === 35) desc = "You see a section of rough stone wall.";
+            let desc = `You see a 5-foot section of floor at [${coords.vttX}, ${coords.vttY}].`;
+            if (tile === 35) desc = `You see rough stone wall at [${coords.vttX}, ${coords.vttY}].`;
             if (dungeonData.Doors[doorKey]) {
                 const door = dungeonData.Doors[doorKey];
                 desc = `You see a ${door.Material.toLowerCase()} door. It is ${door.IsOpen ? "open" : "closed"}.`;
             }
 
-            logEvent(`Observe (${x}, ${y}): ${desc}`, "observe");
+            logEvent(`Observe: ${desc}`, "observe");
         });
 
-        // Right Click: Radial Action Menu
         canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault(); 
             if (!dungeonData) return;
             
-            const rect = canvas.getBoundingClientRect();
-            const x = Math.floor((e.clientX - rect.left) / TILE_SIZE);
-            const y = Math.floor((e.clientY - rect.top) / TILE_SIZE);
-            
-            const doorKey = `${x},${y}`;
-            const door = dungeonData.Doors[doorKey];
-            const tile = dungeonData.Grid[y][x];
+            const coords = getWorldCoordinates(e);
+            if (coords.goY < 0 || coords.goY >= dungeonData.Height || coords.goX < 0 || coords.goX >= dungeonData.Width) return;
 
-            radialMenu.innerHTML = ''; // Clear old buttons
-            
-            // Build Context Actions
+            const doorKey = `${coords.goX},${coords.goY}`;
+            const door = dungeonData.Doors[doorKey];
+            const tile = dungeonData.Grid[coords.goY][coords.goX];
+
+            radialMenu.innerHTML = ''; 
             let actions = [];
             
             if (door) {
-                actions.push({ name: "Inspect Door", log: `You inspect the ${door.Material} door.` });
+                actions.push("Inspect");
                 if (!door.IsOpen) {
-                    actions.push({ name: "Open Door", log: `You attempt to open the door.` });
-                    if (door.Lock !== 0) actions.push({ name: "Pick Lock", log: `You attempt to pick the lock.` });
-                    actions.push({ name: "Bash Door", log: `You violently bash the door.` });
+                    actions.push("Open");
+                    if (door.Lock !== 0) actions.push("Unlock");
+                    if (door.IsTrapped && door.IsTrapDetected) actions.push("Disable Trap");
+                    actions.push("Bash");
                 } else {
-                    actions.push({ name: "Close Door", log: `You close the door.` });
+                    actions.push("Close");
                 }
-            } else if (tile === 46) { // Floor
-                actions.push({ name: "Move Here", log: `You move to (${x}, ${y}).` });
-                actions.push({ name: "Search Tile", log: `You search the floor at (${x}, ${y}).` });
-            } else if (tile === 35) { // Wall
-                actions.push({ name: "Search Wall", log: `You search the wall at (${x}, ${y}).` });
+            } else if (tile === 46 || tile === 43 || tile === 79) { 
+                actions.push("Move Here");
+                actions.push("Search Tile");
+            } else if (tile === 35) { 
+                actions.push("Search Wall");
             }
 
             if (actions.length === 0) return;
 
-            // Populate Menu
-            actions.forEach(action => {
+            actions.forEach(actionName => {
                 const btn = document.createElement('button');
                 btn.className = 'radial-btn';
-                btn.textContent = action.name;
+                
+                if (actionName === "Move Here") {
+                    btn.textContent = `Move to [${coords.vttX}, ${coords.vttY}]`;
+                } else {
+                    btn.textContent = actionName;
+                }
+
                 btn.onclick = () => {
-                    logEvent(`[Action] ${action.log}`, "action");
                     radialMenu.style.display = 'none';
-                    // Trigger Go WASM mechanics here later
+                    
+                    // Send interaction to Go engine
+                    const jsonString = window.interactWithTile(coords.goX, coords.goY, actionName, coords.vttX, coords.vttY);
+                    dungeonData = JSON.parse(jsonString);
+                    
+                    // Print logs from Go engine
+                    if (dungeonData.Log && dungeonData.Log.length > 0) {
+                        dungeonData.Log.forEach(msg => logEvent(msg, "result"));
+                    }
+                    
+                    renderMap();
                 };
+                
                 radialMenu.appendChild(btn);
             });
 
-            // Position and show menu
             radialMenu.style.left = `${e.clientX}px`;
             radialMenu.style.top = `${e.clientY}px`;
             radialMenu.style.display = 'block';
         });
 
-        // Close menu if clicking outside
         document.addEventListener('click', (e) => {
             if (e.target !== canvas && !radialMenu.contains(e.target)) {
                 radialMenu.style.display = 'none';
             }
         });
-
-        loadDungeon();
     </script>
 </body>
 </html>
